@@ -26,7 +26,7 @@ export default function IncidentCard({ incident, compact }) {
             {showSnapshot && snapshot && (
                 <div className="adm-incident-snapshot">
                     <img
-                        src={`http://localhost:3000/snapshots/${snapshot.replace('snapshots/', '')}`}
+                        src={`http://localhost:3000/accidents/snapshot/${incident.snapshot}`}
                         alt="accident snapshot"
                         style={{ width: '100%', borderRadius: 8, marginTop: 8 }}
                     />
