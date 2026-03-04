@@ -1,8 +1,12 @@
 [
     {
-        "incident_id": "20260225_101303",
+        "incident_id": "20260304_055619",
         "incident_type": "vehicle_collision",
-        "timestamp": "2026-02-25 10:13:03",
-        "snapshot": "snapshot_20260225_101303.jpg"
+        "timestamp": "2026-03-04 05:56:19",
+        "snapshot": "snapshot_20260304_055619.jpg",
+        "vehicle_a": 25,
+        "vehicle_b": 26,
+        "iou": 0.54,
+        "confidence": 0.52
     }
 ]

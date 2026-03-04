@@ -1,160 +1,226 @@
-🚦 TRAFIQ – AI Traffic Accident Detection System
+# TRAFIQ – AI-Powered Traffic Accident Detection System
 
-Overview:
+## Overview
 
-TRAFIQ is an AI-powered traffic monitoring system designed to automatically detect vehicle collisions from video footage.
+This project was developed as part of the PIDEV – 4th Year Engineering Program at **Esprit School of Engineering** (Academic Year 2025–2026).
 
-The system uses computer vision and deep learning to:
+TRAFIQ is an AI-powered traffic monitoring system that automatically detects vehicle collisions from video footage using computer vision and deep learning. It captures accident snapshots, generates structured JSON reports in real time, and displays them on an admin dashboard.
 
-Detect vehicles
+---
 
-Identify collisions
-
-Capture accident snapshots
-
-Generate structured accident reports (JSON)
-
-
-
-## ✅ Features
+## Features
 
 - Vehicle detection using YOLO
 - Collision detection using bounding-box overlap (IoU)
-- Accident classification with trained crash model
+- Accident classification with a trained crash model
+- Multi-frame stability check to reduce false positives
 - Automatic accident snapshot capture
 - JSON accident report generation
+- REST API with NestJS serving accident logs and snapshots
+- MongoDB storage for accident records
+- Admin dashboard displaying live incidents with snapshots and confidence scores
 
+---
+
+## Tech Stack
+
+### Frontend
+- React.js (Vite)
+
+### Backend
+- NestJS
+- Python (AI Engine – YOLOv8 via Ultralytics)
+
+### Database
+- MongoDB
+
+### AI / ML
+- YOLOv8 (Ultralytics)
+- OpenCV
+- NumPy
+
+---
+
+## Architecture
+
+```
+TRAFIQ/
+├── backend/
+│   ├── ai-engine/
+│   │   ├── detect_video.py           # Main detection script
+│   │   ├── incidents_log.json        # Generated accident reports
+│   │   ├── snapshots/                # Captured accident frames
+│   │   ├── dataset/                  # YOLO training dataset (local only)
+│   │   └── models/
+│   │       ├── best_vehicle.pt       # Vehicle detection model
+│   │       └── best_crash.pt         # Crash classification model
+│   └── server/                       # NestJS REST API
+│       └── src/
+│           ├── accidents/            # Accidents module (controller, service, schema)
+│           ├── app.module.ts
+│           └── main.ts
+└── frontend/                         # React admin dashboard (Vite)
+    └── src/
+        ├── App.css
+        ├── App.jsx
+        ├── index.css
+        ├── main.jsx
+        ├── assets/
+        ├── apps/
+        │   ├── admin/
+        │   │   ├── AdminApp.jsx
+        │   │   ├── components/
+        │   │   │   ├── AdminMap.jsx
+        │   │   │   ├── EventLogRow.jsx
+        │   │   │   ├── IncidentCard.jsx
+        │   │   │   ├── SnapshotViewer.jsx
+        │   │   │   ├── StatCard.jsx
+        │   │   │   └── layout/
+        │   │   │       ├── AdminSidebar.jsx
+        │   │   │       └── AdminTopBar.jsx
+        │   │   └── pages/
+        │   │       ├── AIAgent.jsx
+        │   │       ├── Analytics.jsx
+        │   │       ├── Dashboard.jsx
+        │   │       ├── Incidents.jsx
+        │   │       ├── LiveMonitoring.jsx
+        │   │       ├── Login.jsx
+        │   │       ├── Settings.jsx
+        │   │       └── Snapshots.jsx
+        │   └── public/
+        │       ├── PublicApp.jsx
+        │       ├── components/
+        │       │   ├── ProximityAlert.jsx
+        │       │   ├── PublicMap.jsx
+        │       │   └── RouteCard.jsx
+        │       └── pages/
+        │           ├── Home.jsx
+        │           ├── RoutePlanner.jsx
+        │           └── RouteStatus.jsx
+        └── shared/
+            ├── context/
+            │   ├── AuthContext.jsx
+            │   └── TrafikContext.jsx
+            ├── hooks/
+            │   ├── useGeolocation.js
+            │   ├── useNotifications.js
+            │   ├── useProximity.js
+            │   ├── useRoutes.js
+            │   └── useTrafikData.js
+            └── services/
+                └── trafiqApi.js
+```
+
+---
 
 ## 🧠 AI Models
 
-- Vehicle Detection Model
+**Vehicle Detection Model** — `best_vehicle.pt`  
+Detects: Cars, Trucks, Buses, Motorcycles
 
-Model: vehicle-model.pt
+**Crash Detection Model** — `best_crash.pt`  
+Classes: `0`, `1`, `2` — only class `2` is considered a valid accident
 
-Detects:
+---
 
-    - Cars
+## 🧪 Detection Logic
 
-    - Trucks
+An accident is confirmed when all 3 conditions are met:
 
-    - Buses
+1. Two vehicles overlap (IoU ≥ threshold)
+2. Speed drop detected on one or both vehicles
+3. Detection is stable across multiple frames
 
-    - Motorcycles
+Each confirmed incident saves a snapshot and logs vehicle IDs, IoU score, and YOLO confidence to `incidents_log.json`, which is then synced to MongoDB via the NestJS API.
 
-- Crash Detection Model
+---
 
-Model: crash-model.pt
+## Getting Started
 
-Classes:
+### 1. AI Engine
 
-['0', '1', '2']
-
-Only "2" class is considered a valid accident.
-
-⚙️ Technologies Used
-
-- Python
-
-- OpenCV
-
-- YOLOv8 (Ultralytics)
-
-- NumPy
-
-- JSON
-
-- VSCode
-
-## 📁 Project Structure
-```
-backend/
-└── ai-engine/
-    ├── detect_video.py
-    ├── incidents_log.json
-    └── models/
-        ├── best_vehicle.pt
-        └── best_crash.pt
-```
-
-
-▶️ How to Run
-
-1️⃣ Install Dependencies
+```bash
 pip install ultralytics opencv-python numpy
-
-2️⃣ Run Detection (backend/ai-engine/)
+cd backend/ai-engine
 python detect_video.py
-🎥 Input Video
-
-Place video file inside:
-
-backend/ai-engine/
-
-Example:
-
-accident0.mp4
-
-Recommended resolution:
-
-1280x720
-📸 Output
-Accident Snapshot
-
-When an accident is detected:
-
-snapshots/accident_YYYYMMDD_HHMMSS.jpg
-
-Example:
-
-snapshots/accident_20260225_184233.jpg
-JSON Report
-
-File created automatically:
-
-accident_log.json
-
-Example:
-
-```
-  {
-    "timestamp": "2026-02-25 18:42:33",
-    "snapshot": "snapshots/accident_20260225_184233.jpg",
-    "confidence": 0.91
-  }
 ```
 
+> 🎥 Place your video file inside `backend/ai-engine/` (e.g. `accident0.mp4`). Recommended resolution: 1280x720.
 
+### 2. Backend (NestJS)
 
-🧪 Detection Logic
+> Make sure MongoDB is running locally on port 27017 before starting the server.
 
-An accident is confirmed when:
+```bash
+cd backend/server
+npm install
+npm run start:dev
+```
 
-1️⃣ Two vehicles overlap (IoU ≥ threshold)
+### 3. Frontend (React)
 
-AND
+```bash
+cd frontend
+npm install
+npm run dev
+```
 
-2️⃣ Crash model detects class:
+> Open `http://localhost:5173/admin/login` and sign in with the admin credentials below.
 
-2
+### 4. Admin Login
 
-AND
+| Field | Value |
+|-------|-------|
+| Email | `admin@trafiq.ai` |
+| Password | `trafiq2025` |
 
-3️⃣ Detection is stable across multiple frames
+After logging in, navigate to **Incidents** to view live accident detections with snapshots and confidence scores.
 
-This reduces false detections.
+---
 
+## 📸 Output
 
+**Snapshot** — saved automatically on accident detection:
+```
+snapshots/snapshot_YYYYMMDD_HHMMSS.jpg
+```
 
-Sprint 1 :
+**JSON Report** — appended to `incidents_log.json`:
+```json
+{
+  "incident_id": "20260304_032254",
+  "incident_type": "vehicle_collision",
+  "timestamp": "2026-03-04 03:22:54",
+  "snapshot": "snapshots/snapshot_20260304_032254.jpg",
+  "vehicle_a": 3,
+  "vehicle_b": 7,
+  "iou": 0.47,
+  "confidence": 0.91
+}
+```
 
-✔ Vehicle detection
+---
 
-✔ Collision detection
+## Contributors
 
-✔ Crash classification
+| Name | GitHub |
+|------|--------|
+| Malek Hayouni | [@Malekhayouni](https://github.com/Malekhayouni) |
+| Mohamed Khalil | [@mohamedkhalil26](https://github.com/mohamedkhalil26) |
+| Amal Romdhani | [@Amal-Romdhani](https://github.com/Amal-Romdhani) |
+| Raed Chebbi | [@Raedchebbi](https://github.com/Raedchebbi) |
 
-✔ Snapshot capture
+---
 
-✔ JSON logging
+## Academic Context
 
-✔ Video processing
+Developed at **Esprit School of Engineering – Tunisia**  
+PIDEV – 4TWIN3 | 2025–2026
+
+---
+
+## Acknowledgments
+
+- [Ultralytics YOLOv8](https://github.com/ultralytics/ultralytics)
+- [OpenCV](https://opencv.org/)
+- Esprit School of Engineering for academic support
