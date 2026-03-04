@@ -16,7 +16,7 @@
 
 ## Overview
 
-This project was developed as part of the **PIDEV – 3rd Year Engineering Program** at **Esprit School of Engineering** (Academic Year 2025–2026).
+This project was developed as part of the **PIDEV – 4th Year Engineering Program** at **Esprit School of Engineering** (Academic Year 2025–2026).
 
 **TRAFIQ** (Traffic Intelligence Quotient) is a full-stack web platform that uses AI computer vision to monitor road traffic in real time, detect accidents automatically, and alert drivers in the vicinity. This repository contains the **React frontend** of the platform.
 
@@ -194,7 +194,7 @@ This project was developed as part of the **PIDEV – 3rd Year Engineering Progr
 |---|---|
 | Institution | Esprit School of Engineering – Tunisia |
 | Program | PIDEV — Projet Intégré de Développement |
-| Year | 3rd Year Engineering |
+| Year | 4th Year Engineering |
 | Academic Year | 2025–2026 |
 | Class | [4TWIN3] |
 | Supervisor | [Bouhdid Badiaa] |
