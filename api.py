@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, Response, request
+from flask import Flask, jsonify, Response, request, send_file
 from flask_cors import CORS
 import threading
 import time
@@ -16,10 +16,15 @@ app = Flask(__name__)
 CORS(app)
 
 # ==============================
-# INCIDENTS PERSISTENCE
+# DIRECTORIES
 # ==============================
 INCIDENTS_FILE = "incidents.json"
+SNAPSHOTS_DIR = "snapshots"
+os.makedirs(SNAPSHOTS_DIR, exist_ok=True)
 
+# ==============================
+# INCIDENTS PERSISTENCE
+# ==============================
 def load_incidents():
     if os.path.exists(INCIDENTS_FILE):
         with open(INCIDENTS_FILE, "r") as f:
@@ -33,10 +38,23 @@ def save_incidents(incidents):
 incidents_lock = threading.Lock()
 incidents_db = load_incidents()
 
-def log_incident(level, label, vehicle_count, avg_speed, slow_ratio):
+def save_snapshot(incident_id, frame):
+    path = os.path.join(SNAPSHOTS_DIR, f"{incident_id}.jpg")
+    cv2.imwrite(path, frame, [cv2.IMWRITE_JPEG_QUALITY, 90])
+    print(f"[SNAPSHOT SAVED] {path}")
+    return path
+
+def log_incident(level, label, vehicle_count, avg_speed, slow_ratio, frame=None):
     with incidents_lock:
+        incident_id = f"CGS-{int(time.time())}"
+        snapshot_url = None
+
+        if frame is not None:
+            save_snapshot(incident_id, frame)
+            snapshot_url = f"/api/snapshots/{incident_id}"
+
         incident = {
-            "id": f"CGS-{int(time.time())}",
+            "id": incident_id,
             "type": "CONGESTION",
             "label": label,
             "level": level,
@@ -49,11 +67,12 @@ def log_incident(level, label, vehicle_count, avg_speed, slow_ratio):
             "resolved": False,
             "resolved_at": None,
             "severity": "high" if level >= 3 else "medium",
+            "snapshot": snapshot_url,
         }
         incidents_db.append(incident)
         save_incidents(incidents_db)
-        print(f"[INCIDENT LOGGED] {incident['id']} — {label}")
-        return incident["id"]
+        print(f"[INCIDENT LOGGED] {incident_id} — {label}")
+        return incident_id
 
 def auto_resolve_last_congestion():
     with incidents_lock:
@@ -78,22 +97,14 @@ def resolve_incident(incident_id):
     return False
 
 # ==============================
-# SHARED DETECTION STATE
+# SHARED STATE
 # ==============================
 state_lock = threading.Lock()
 detection_state = {
-    "vehicle_count": 0,
-    "avg_speed": 0,
-    "slow_ratio": 0,
-    "congestion_level": 0,
-    "congestion_label": "TRAFFIC FREE",
-    "alert_active": False,
-    "vehicle_count_up": 0,
-    "vehicle_count_down": 0,
-    "fps": 0,
-    "running": False,
-    "stream_title": "",
-    "last_update": None,
+    "vehicle_count": 0, "avg_speed": 0, "slow_ratio": 0,
+    "congestion_level": 0, "congestion_label": "TRAFFIC FREE",
+    "alert_active": False, "vehicle_count_up": 0, "vehicle_count_down": 0,
+    "fps": 0, "running": False, "stream_title": "", "last_update": None,
 }
 
 latest_frame = None
@@ -164,11 +175,9 @@ def detection_loop():
     level_history = deque(maxlen=30)
     fps_counter = deque(maxlen=30)
     last_time = time.time()
-
     congestion_start_time = None
     clear_start_time = None
     alert_active = False
-
     reconnect_attempts = 0
 
     while True:
@@ -187,6 +196,8 @@ def detection_loop():
             continue
 
         reconnect_attempts = 0
+        clean_frame = frame.copy()  # clean copy for snapshot
+
         current_time = time.time()
         dt = max(current_time - last_time, 0.001)
         fps_counter.append(1.0 / dt)
@@ -230,7 +241,6 @@ def detection_loop():
 
             diff = cy - first_y_position[tracker_id]
             direction = "DOWN" if diff > 20 else "UP" if diff < -20 else None
-
             if direction and abs(cy - LINE_Y_CENTER) < 50:
                 if direction == "DOWN" and tracker_id not in counted_ids_down and cy > LINE_Y_CENTER:
                     counted_ids_down.add(tracker_id)
@@ -245,6 +255,10 @@ def detection_loop():
             cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
             cv2.putText(frame, f"ID{tracker_id} {int(current_speed)}",
                         (x1, y1 - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.4, color, 1)
+            # Draw on clean frame too so vehicles are visible in snapshot
+            cv2.rectangle(clean_frame, (x1, y1), (x2, y2), color, 2)
+            cv2.putText(clean_frame, f"ID{tracker_id} {int(current_speed)}",
+                        (x1, y1 - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.4, color, 1)
 
         vehicle_count = len(current_tracked_ids)
         avg_speed = float(np.mean(frame_speeds)) if frame_speeds else 0
@@ -254,12 +268,11 @@ def detection_loop():
         raw_level, _ = get_congestion_level(vehicle_count, slow_ratio)
         level_history.append(raw_level)
         smoothed_level = int(np.round(np.mean(level_history)))
-
         level_map = {0: "TRAFFIC FREE", 1: "MODERATE TRAFFIC",
                      2: "HEAVY CONGESTION", 3: "SEVERE CONGESTION"}
         congestion_label = level_map[smoothed_level]
 
-        # Alert + auto incident logging
+        # Alert + snapshot logging
         if smoothed_level >= 2:
             clear_start_time = None
             if congestion_start_time is None:
@@ -267,8 +280,24 @@ def detection_loop():
             elif time.time() - congestion_start_time >= CONGESTION_CONFIRM_SECONDS:
                 if not alert_active:
                     alert_active = True
+                    # Build annotated snapshot
+                    snap = clean_frame.copy()
+                    h, w = snap.shape[:2]
+                    # Top banner
+                    cv2.rectangle(snap, (0, 0), (w, 52), (20, 20, 140), -1)
+                    cv2.putText(snap,
+                        f"!! CONGESTION ALERT — {congestion_label}",
+                        (14, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (255, 255, 255), 2)
+                    cv2.putText(snap,
+                        datetime.now().strftime("%Y-%m-%d  %H:%M:%S"),
+                        (14, 48), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (180, 200, 255), 1)
+                    # Bottom bar
+                    cv2.rectangle(snap, (0, h - 36), (w, h), (10, 10, 10), -1)
+                    cv2.putText(snap,
+                        f"Vehicles: {vehicle_count}   Slow: {int(slow_ratio*100)}%   Avg speed: {int(avg_speed)} px/s",
+                        (14, h - 14), cv2.FONT_HERSHEY_SIMPLEX, 0.52, (255, 220, 0), 1)
                     log_incident(smoothed_level, congestion_label,
-                                 vehicle_count, avg_speed, slow_ratio)
+                                 vehicle_count, avg_speed, slow_ratio, frame=snap)
         else:
             congestion_start_time = None
             if alert_active:
@@ -347,20 +376,34 @@ def incident_stats():
         severe = sum(1 for i in incidents_db if i.get('level', 0) >= 3)
         resolved_list = [i for i in incidents_db if i['resolved'] and i['duration_seconds'] > 0]
         avg_duration = int(sum(i['duration_seconds'] for i in resolved_list) / len(resolved_list)) if resolved_list else 0
-    return jsonify({
-        "total": total,
-        "active": active,
-        "resolved": resolved,
-        "severe": severe,
-        "avg_duration_seconds": avg_duration,
-    })
+    return jsonify({"total": total, "active": active, "resolved": resolved,
+                    "severe": severe, "avg_duration_seconds": avg_duration})
 
 @app.route('/api/incidents/<incident_id>/resolve', methods=['POST'])
 def resolve_incident_route(incident_id):
     success = resolve_incident(incident_id)
     if success:
-        return jsonify({"success": True, "message": f"{incident_id} resolved"})
+        return jsonify({"success": True})
     return jsonify({"success": False, "message": "Not found or already resolved"}), 404
+
+@app.route('/api/snapshots/<incident_id>')
+def get_snapshot(incident_id):
+    if not incident_id.startswith("CGS-"):
+        return jsonify({"error": "Invalid ID"}), 400
+    path = os.path.join(SNAPSHOTS_DIR, f"{incident_id}.jpg")
+    if not os.path.exists(path):
+        return jsonify({"error": "Snapshot not found"}), 404
+    return send_file(path, mimetype='image/jpeg')
+
+@app.route('/api/snapshots/<incident_id>/download')
+def download_snapshot(incident_id):
+    if not incident_id.startswith("CGS-"):
+        return jsonify({"error": "Invalid ID"}), 400
+    path = os.path.join(SNAPSHOTS_DIR, f"{incident_id}.jpg")
+    if not os.path.exists(path):
+        return jsonify({"error": "Snapshot not found"}), 404
+    return send_file(path, mimetype='image/jpeg',
+                     as_attachment=True, download_name=f"{incident_id}.jpg")
 
 if __name__ == '__main__':
     print("Starting Flask API on http://localhost:5000")
@@ -369,4 +412,6 @@ if __name__ == '__main__':
     print("  GET  /api/incidents")
     print("  GET  /api/incidents/stats")
     print("  POST /api/incidents/<id>/resolve")
+    print("  GET  /api/snapshots/<id>          ← view snapshot")
+    print("  GET  /api/snapshots/<id>/download  ← download snapshot")
     app.run(host='0.0.0.0', port=5000, debug=False, threaded=True)
