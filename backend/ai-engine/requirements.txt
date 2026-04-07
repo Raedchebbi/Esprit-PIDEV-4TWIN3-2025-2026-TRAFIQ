@@ -1,0 +1,18 @@
+# TRAFIQ AI Engine — Python dependencies
+# Install with: pip install -r requirements.txt
+
+# Computer vision & YOLO
+opencv-python>=4.9.0
+ultralytics>=8.1.0
+
+# Image processing (composite frame tiling for Groq)
+Pillow>=10.2.0
+
+# Groq LLM inference
+groq>=0.8.0
+
+# Socket.io client (connects TO NestJS WebSocket gateway)
+python-socketio[client]>=5.11.0
+
+# Environment variable loading
+python-dotenv>=1.0.1

@@ -1,18 +1,17 @@
-import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document } from 'mongoose';
+// Plain TypeScript interface — no MongoDB/Mongoose dependency.
+// Python AI engine appends incidents to backend/ai-engine/incidents.jsonl.
 
-export type AccidentDocument = Accident & Document;
-
-@Schema()
-export class Accident {
-  @Prop() incident_id: string;
-  @Prop() incident_type: string;
-  @Prop() timestamp: string;
-  @Prop() snapshot: string;
-  @Prop() vehicle_a: number;
-  @Prop() vehicle_b: number;
-  @Prop() iou: number;
-  @Prop() confidence: number;
+export interface Accident {
+  incident_id:   string;
+  incident_type: string;
+  timestamp:     string;
+  snapshot:      string;
+  vehicle_a:     number;
+  vehicle_b:     number;
+  iou:           number;
+  confidence:    number;
+  camera_id:     string;
+  risk_score?:   number;
+  risk_level?:   string;
+  risk_reason?:  string;
 }
-
-export const AccidentSchema = SchemaFactory.createForClass(Accident);
