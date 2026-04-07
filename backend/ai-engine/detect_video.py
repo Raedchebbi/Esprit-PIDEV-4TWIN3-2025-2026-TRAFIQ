@@ -1,272 +1,1144 @@
 # =============================================================
-# TRAFIQ – AI-Powered Traffic Accident Detection Engine
+# TRAFIQ – Multi-Camera Risk Assessment Engine v2
 # =============================================================
-# This script processes a video file frame by frame using two
-# YOLO models:
-#   1. Vehicle Detection Model  → detects and tracks vehicles
-#   2. Crash Detection Model    → classifies crash severity
 #
-# When a collision is confirmed, it:
-#   - Saves a snapshot of the frame to /snapshots
-#   - Logs the incident details to incidents_log.json
+# Data flow:
+#
+#   RTSP × N      YOLO × N     Collision     Groq Vision    Event
+#   ─────────     ────────     Check         Assessor       Dispatch
+#   cam0.read() ──►            ──► streak    ──► every      ──► sio.emit()
+#   cam1.read() ──► track()        confirm       N frames       pymongo
+#   cam2.read() ──►                                             write
+#        │
+#   reconnect on drop
+#   (exponential backoff)
 #
 # HOW TO RUN:
 #   cd backend/ai-engine
+#   cp .env.example .env        # fill in GROQ_API_KEY, RTSP_CAM_*, etc.
+#   pip install -r requirements.txt
 #   python detect_video.py
+#
+# ENVIRONMENT VARIABLES (see .env.example for full list):
+#   GROQ_API_KEY            — required when ENABLE_RISK_ASSESSMENT=true
+#   RTSP_CAM_0/1/2          — RTSP stream URLs (falls back to accident0.mp4)
+#   ENABLE_RISK_ASSESSMENT  — true/false (default: true)
+#   RISK_FRAME_INTERVAL     — call Groq every N frames (default: 60)
+#   NESTJS_URL              — NestJS Socket.io URL (default: http://localhost:3000)
+#   MONGO_URI               — MongoDB connection string
+#   SHOW_DISPLAY            — true to open OpenCV preview windows (dev only)
 # =============================================================
 
-from ultralytics import YOLO
-import cv2
-import json
-import datetime
 import os
+import io
+import json
 import math
+import time
+import queue
+import base64
+import logging
+import datetime
+import threading
+from dataclasses import dataclass, field
 from itertools import combinations
+from typing import Optional
 
-# ================= CONFIG =================
-# Base directory — resolves to wherever this script is located
-# This makes all paths work regardless of who runs it or on what machine
+import cv2
+from ultralytics import YOLO
+from PIL import Image
+from dotenv import load_dotenv
+import groq as groq_sdk
+import socketio
+
+from prompts import build_risk_prompt
+
+
+# ── Bootstrap ──────────────────────────────────────────────────────────────────
+load_dotenv()
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
+logger = logging.getLogger("trafiq.engine")
+
+
+# ── Config ─────────────────────────────────────────────────────────────────────
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# Paths to the trained YOLO model weights (relative to this script)
-MODEL_VEHICLE_PATH = os.path.join(BASE_DIR, "models", "vehicule-model.pt")
-MODEL_CRASH_PATH   = os.path.join(BASE_DIR, "models", "crash-model.pt")
+# Camera sources: use RTSP_CAM_* env vars; fall back to test video if none set
+_raw_sources = [
+    os.environ.get("RTSP_CAM_0"),
+    os.environ.get("RTSP_CAM_1"),
+    os.environ.get("RTSP_CAM_2"),
+]
+CAMERA_SOURCES: list[str] = [s for s in _raw_sources if s]
+if not CAMERA_SOURCES:
+    _fallback = os.path.join(BASE_DIR, "accident0.mp4")
+    CAMERA_SOURCES = [_fallback]
+    logger.warning(
+        "No RTSP_CAM_* env vars found — using fallback video: %s", _fallback
+    )
 
-# Path to the input video file (place your video inside backend/ai-engine/)
-VIDEO_PATH = os.path.join(BASE_DIR, "accident0.mp4")
+MODEL_PATH             = os.path.join(BASE_DIR, "models", "vehicule-model.pt")
+SNAPSHOT_DIR           = os.path.join(BASE_DIR, "snapshots")
+BASE_CONF              = float(os.environ.get("BASE_CONF", "0.4"))
+IOU_THRESHOLD          = float(os.environ.get("IOU_THRESHOLD", "0.4"))
+# IoU > this value = duplicate detection of same object, not a real collision
+IOU_MAX_THRESHOLD      = float(os.environ.get("IOU_MAX_THRESHOLD", "0.85"))
+# Collision proximity: boxes within this fraction of avg vehicle diagonal are "colliding".
+# 0.15 = within ~15% of vehicle size — catches side-impact / T-bone (IoU can be 0 in aftermath).
+PROXIMITY_THRESHOLD    = float(os.environ.get("PROXIMITY_THRESHOLD", "0.15"))
+# Both vehicles in a collision pair must individually meet this confidence
+MIN_PAIR_CONF          = float(os.environ.get("MIN_PAIR_CONF", "0.45"))
+SPEED_DROP_THRESHOLD   = float(os.environ.get("SPEED_DROP_THRESHOLD", "15"))
+# Minimum box area (px²) — boxes smaller than this are noise/distant reflections, not vehicles
+MIN_BOX_AREA           = float(os.environ.get("MIN_BOX_AREA", "3500"))
+# A collision pair must have similar-sized boxes: smaller/larger ratio must exceed this
+MIN_BOX_SIZE_RATIO     = float(os.environ.get("MIN_BOX_SIZE_RATIO", "0.20"))
+# If a vehicle's decayed peak speed (px/frame) never exceeded this, it was never moving
+# fast enough to have been in a real crash (distinguishes normal red-light stop from crash)
+SPEED_HIGH_THRESHOLD   = float(os.environ.get("SPEED_HIGH_THRESHOLD", "10.0"))
+CONFIRMATION_FRAMES    = int(os.environ.get("CONFIRMATION_FRAMES", "3"))
+COOLDOWN_FRAMES        = int(os.environ.get("COOLDOWN_FRAMES", "400"))
+RISK_FRAME_INTERVAL    = int(os.environ.get("RISK_FRAME_INTERVAL", "60"))
+ENABLE_RISK_ASSESSMENT = os.environ.get("ENABLE_RISK_ASSESSMENT", "true").lower() == "true"
+NESTJS_URL             = os.environ.get("NESTJS_URL", "http://localhost:3000")
+INCIDENTS_FILE         = os.path.join(BASE_DIR, "incidents.jsonl")
+GROQ_API_KEY           = os.environ.get("GROQ_API_KEY")
+MAX_RECONNECT_ATTEMPTS = int(os.environ.get("MAX_RECONNECT_ATTEMPTS", "10"))
+SHOW_DISPLAY           = os.environ.get("SHOW_DISPLAY", "false").lower() == "true"
 
-# Minimum confidence threshold for YOLO detections (0.0 - 1.0)
-BASE_CONF = 0.4
-
-# Minimum Intersection over Union (IoU) overlap between two vehicle
-# bounding boxes to consider them as potentially colliding
-IOU_THRESHOLD = 0.4
-
-# If a vehicle's pixel displacement between frames drops below this,
-# it is considered to have slowed down or stopped (collision indicator)
-DIST_DROP_THRESHOLD  = 25
-SPEED_DROP_THRESHOLD = 15
-
-# Number of consecutive frames a collision must be detected before
-# it is confirmed — reduces false positives from brief overlaps
-CONFIRMATION_FRAMES = 2
-
-# After logging an incident, wait this many frames before allowing
-# another incident to be logged — avoids duplicate entries
-COOLDOWN_FRAMES = 400
-
-# Output paths (relative to this script)
-LOG_PATH     = os.path.join(BASE_DIR, "incidents_log.json")  # JSON incident log
-SNAPSHOT_DIR = os.path.join(BASE_DIR, "snapshots")           # Snapshot output folder
-
-# Create snapshots folder if it doesn't exist
 os.makedirs(SNAPSHOT_DIR, exist_ok=True)
 
-# ================= LOAD MODEL =================
-print("Loading vehicle detection model...")
-vehicle_model = YOLO(MODEL_VEHICLE_PATH)
-print("Model loaded successfully.")
+# Fail fast on missing Groq key so the error is obvious at startup
+if ENABLE_RISK_ASSESSMENT and not GROQ_API_KEY:
+    raise RuntimeError(
+        "GROQ_API_KEY is not set but ENABLE_RISK_ASSESSMENT=true.\n"
+        "Add it to .env or set ENABLE_RISK_ASSESSMENT=false to run YOLO-only."
+    )
 
 
-# ================= IoU FUNCTION =================
-def compute_iou(boxA, boxB):
+# ── Model Load ─────────────────────────────────────────────────────────────────
+logger.info("Loading vehicle detection model: %s", MODEL_PATH)
+if not os.path.exists(MODEL_PATH):
+    raise FileNotFoundError(
+        f"Model file not found: {MODEL_PATH}\n"
+        "Place your .pt weights file inside backend/ai-engine/models/"
+    )
+vehicle_model = YOLO(MODEL_PATH)
+logger.info("Model loaded.")
+
+
+# ── Socket.io Client (Python → NestJS) ────────────────────────────────────────
+sio = socketio.Client(
+    reconnection=True,
+    reconnection_attempts=10,
+    reconnection_delay=2,
+    logger=False,
+    engineio_logger=False,
+)
+
+@sio.event
+def connect():
+    logger.info("[WS] Connected to NestJS at %s", NESTJS_URL)
+
+@sio.event
+def disconnect():
+    logger.warning("[WS] Disconnected from NestJS — auto-reconnect active")
+
+@sio.event
+def connect_error(data):
+    logger.warning("[WS] Connection error: %s", data)
+
+def connect_to_nestjs() -> bool:
+    try:
+        sio.connect(NESTJS_URL, wait_timeout=5)
+        return True
+    except Exception as exc:
+        logger.warning(
+            "[WS] Could not connect to NestJS (%s) — engine runs without real-time push", exc
+        )
+        return False
+
+
+# ── Groq Client ────────────────────────────────────────────────────────────────
+_groq_client = groq_sdk.Groq(api_key=GROQ_API_KEY, max_retries=0) if ENABLE_RISK_ASSESSMENT else None
+
+# Groq runs in a background thread so API latency / retries never block the video loop.
+# maxsize=1: if worker is still busy, the main loop drops the request — no queue pile-up.
+_groq_queue       = queue.Queue(maxsize=1)
+_groq_result: dict       = {"risk_score": 0.0, "risk_level": "LOW", "source": "init"}
+_groq_result_lock = threading.Lock()
+
+
+# ── Data Classes ───────────────────────────────────────────────────────────────
+
+@dataclass
+class CameraState:
     """
-    Computes the Intersection over Union (IoU) between two bounding boxes.
-    IoU measures how much two boxes overlap:
-        - IoU = 0.0 → no overlap
-        - IoU = 1.0 → perfect overlap (same box)
+    Mutable per-camera state that persists across frames.
 
-    Parameters:
-        boxA, boxB: [x1, y1, x2, y2] coordinates of each bounding box
-
-    Returns:
-        float: IoU value between 0 and 1
+    vehicle_memory  : last known center (cx, cy) per tracked vehicle ID
+    collision_streak: consecutive frames with an active collision condition
+    cooldown        : frames remaining before another incident can be logged
+    last_good_frame : most recent valid frame (used as placeholder if cam drops)
+    online          : whether the camera is currently connected
     """
-    # Find the coordinates of the intersection rectangle
+    cam_id:           int
+    url:              str
+    cap:              cv2.VideoCapture
+    vehicle_memory:   dict = field(default_factory=dict)
+    collision_streak: int  = 0
+    cooldown:         int  = 0
+    last_good_frame:  object = None   # np.ndarray | None
+    online:           bool  = True
+    display_collision_ttl: int  = 0          # frames left to keep collision overlay visible
+    display_box_a:    Optional[list] = None  # last confirmed colliding box A (lingering display)
+    display_box_b:    Optional[list] = None  # last confirmed colliding box B
+    speed_peak:       dict = field(default_factory=dict)  # {vid: decayed peak speed} for recent-movement check
+
+
+@dataclass
+class FrameFeatures:
+    """Per-camera, per-frame detection output."""
+    cam_id:             int
+    vehicle_count:      int
+    near_miss_count:    int     # boxes with IoU > 60% of threshold
+    max_iou:            float
+    collision_detected: bool
+    collision_idA:      Optional[int]
+    collision_idB:      Optional[int]
+    collision_iou:      float
+    collision_conf:     float
+    frame:              object          # np.ndarray | None
+    collision_box_a:    Optional[list]  # [x1,y1,x2,y2] of vehicle A
+    collision_box_b:    Optional[list]  # [x1,y1,x2,y2] of vehicle B
+    plotted_frame:      object = None   # YOLO-annotated frame for display
+
+
+# ── Helper: IoU ────────────────────────────────────────────────────────────────
+
+def compute_iou(boxA, boxB) -> float:
+    """
+    Intersection over Union between two [x1, y1, x2, y2] bounding boxes.
+    Returns 0.0 if boxes don't overlap or have zero area.
+    """
     xA = max(boxA[0], boxB[0])
     yA = max(boxA[1], boxB[1])
     xB = min(boxA[2], boxB[2])
     yB = min(boxA[3], boxB[3])
-
-    # Compute intersection area (0 if no overlap)
-    inter = max(0, xB - xA) * max(0, yB - yA)
-
-    # Compute individual box areas
+    inter = max(0.0, xB - xA) * max(0.0, yB - yA)
     areaA = (boxA[2] - boxA[0]) * (boxA[3] - boxA[1])
     areaB = (boxB[2] - boxB[0]) * (boxB[3] - boxB[1])
-
-    # Union area = sum of both areas minus the intersection
     union = areaA + areaB - inter
-
-    if union == 0:
-        return 0
-    return inter / union
+    return inter / union if union > 0 else 0.0
 
 
-# ================= VIDEO CAPTURE =================
-cap = cv2.VideoCapture(VIDEO_PATH)
+def compute_box_gap_ratio(boxA, boxB) -> float:
+    """
+    Normalized gap between two bounding boxes, expressed as a fraction of the
+    average vehicle diagonal.
 
-# Dictionary to store the last known center position of each tracked vehicle
-# Used to compute speed (pixel displacement per frame)
-vehicle_memory = {}
+    - 0.0  = boxes just touching (no gap, no overlap)
+    - < 0  conceptually (any overlap means gap_x=0 AND gap_y=0 → ratio=0)
+    - > 0  = boxes separated; 1.0 = gap equal to one full vehicle diagonal
 
-# Tracks how many consecutive frames a collision condition has been met
-collision_streak = 0
+    This catches side-impact / T-bone aftermath where bounding boxes are
+    adjacent but don't actually overlap (IoU ≈ 0 despite a real collision).
+    """
+    gap_x   = max(0.0, max(boxA[0], boxB[0]) - min(boxA[2], boxB[2]))
+    gap_y   = max(0.0, max(boxA[1], boxB[1]) - min(boxA[3], boxB[3]))
+    avg_w   = ((boxA[2] - boxA[0]) + (boxB[2] - boxB[0])) / 2
+    avg_h   = ((boxA[3] - boxA[1]) + (boxB[3] - boxB[1])) / 2
+    diag    = math.sqrt(avg_w ** 2 + avg_h ** 2)
+    return math.sqrt(gap_x ** 2 + gap_y ** 2) / max(diag, 1.0)
 
-# Cooldown counter to prevent duplicate incident logging
-cooldown = 0
+
+# ── Helper: Camera Reconnect ───────────────────────────────────────────────────
+
+def reconnect_camera(state: CameraState) -> bool:
+    """
+    Try to reopen a dropped RTSP stream with exponential backoff.
+    Caps delay at 30 seconds per attempt.
+    Returns True on success, False after MAX_RECONNECT_ATTEMPTS.
+    """
+    if state.cap:
+        state.cap.release()
+
+    for attempt in range(1, MAX_RECONNECT_ATTEMPTS + 1):
+        delay = min(2 ** attempt, 30)
+        logger.warning(
+            "[CAM-%d] Reconnect attempt %d/%d in %ds",
+            state.cam_id, attempt, MAX_RECONNECT_ATTEMPTS, delay,
+        )
+        time.sleep(delay)
+        cap = cv2.VideoCapture(state.url)
+        if cap.isOpened():
+            state.cap    = cap
+            state.online = True
+            logger.info("[CAM-%d] Reconnected.", state.cam_id)
+            _push_event("camera_status", {"cam_id": state.cam_id, "status": "online"})
+            return True
+        cap.release()
+
+    logger.error(
+        "[CAM-%d] Gave up reconnecting after %d attempts.", state.cam_id, MAX_RECONNECT_ATTEMPTS
+    )
+    state.online = False
+    _push_event("camera_status", {"cam_id": state.cam_id, "status": "offline"})
+    return False
 
 
-# ================= MAIN DETECTION LOOP =================
-while True:
-    ret, frame = cap.read()
+# ── Helper: Feature Extraction ─────────────────────────────────────────────────
 
-    # Stop if video has ended or cannot be read
-    if not ret:
-        break
+def extract_features(state: CameraState, frame) -> FrameFeatures:
+    """
+    Run YOLO tracking on one frame and compute collision indicators.
 
-    # Run YOLO vehicle tracking on the current frame
-    # persist=True keeps track IDs consistent across frames
-    results = vehicle_model.track(frame, persist=True, conf=BASE_CONF, verbose=False)
+    Mutates state.vehicle_memory, state.collision_streak, state.cooldown.
 
-    # Draw bounding boxes and track IDs on the frame for visualization
-    annotated_frame = results[0].plot()
+    Near-miss: any pair with IoU > IOU_THRESHOLD * 0.6 (approaching threshold).
+    Collision : IoU > IOU_THRESHOLD AND at least one vehicle nearly stopped.
+    """
+    # iou=0.45 tightens YOLO's internal NMS so near-identical boxes get merged
+    # before the tracker ever assigns them separate IDs.
+    results = vehicle_model.track(frame, persist=True, conf=BASE_CONF, iou=0.45, verbose=False)
 
-    # Lists and dicts to store per-frame detection data
-    boxes     = []  # List of (vehicle_id, bounding_box) tuples
-    centers   = {}  # Current center positions {vehicle_id: (cx, cy)}
-    speeds    = {}  # Pixel speed per frame {vehicle_id: speed}
-    confs_map = {}  # YOLO detection confidence {vehicle_id: confidence}
+    # YOLO-rendered frame (boxes + track IDs) — only used for live display
+    plotted_frame = results[0].plot() if SHOW_DISPLAY else None
 
-    # ---- Extract detections if any vehicles are tracked ----
+    boxes      = []   # list of (vehicle_id, [x1,y1,x2,y2])
+    centers    = {}   # {vid: (cx, cy)}
+    speeds     = {}   # {vid: pixel_displacement}
+    confs_map  = {}   # {vid: confidence}
+    near_misses = 0
+    max_iou     = 0.0
+
     if results[0].boxes.id is not None:
-        ids   = results[0].boxes.id.cpu().numpy()    # Tracked vehicle IDs
-        xyxy  = results[0].boxes.xyxy.cpu().numpy()  # Bounding box coordinates
-        confs = results[0].boxes.conf.cpu().numpy()  # Detection confidence scores
+        ids   = results[0].boxes.id.cpu().numpy()
+        xyxy  = results[0].boxes.xyxy.cpu().numpy()
+        confs = results[0].boxes.conf.cpu().numpy()
 
-        for i, box in enumerate(xyxy):
+        # ── Post-track deduplication ─────────────────────────────────────────
+        # YOLO NMS is class-aware: a "car" and a "truck" box on the same vehicle
+        # both survive NMS and get separate track IDs.  Remove the lower-confidence
+        # box from any pair that still overlaps by more than 60 %.
+        _raw = sorted(
+            zip(ids, xyxy, confs),
+            key=lambda t: float(t[2]),
+            reverse=True,              # highest confidence first
+        )
+        _kept_boxes: list[list] = []
+        _kept_ids:   list[int]  = []
+        _kept_confs: list[float] = []
+        for _id, _box, _conf in _raw:
+            _duplicate = any(
+                compute_iou([float(v) for v in _box], _kb) > 0.60
+                for _kb in _kept_boxes
+            )
+            if not _duplicate:
+                _kept_boxes.append([float(v) for v in _box])
+                _kept_ids.append(int(_id))
+                _kept_confs.append(float(_conf))
+        # ─────────────────────────────────────────────────────────────────────
+
+        for vid, box, conf in zip(_kept_ids, _kept_boxes, _kept_confs):
             x1, y1, x2, y2 = box
-
-            # Compute center of bounding box
             cx = (x1 + x2) / 2
             cy = (y1 + y2) / 2
-
-            vid = int(ids[i])
             centers[vid]   = (cx, cy)
-            confs_map[vid] = float(confs[i])
-            boxes.append((vid, [x1, y1, x2, y2]))
+            confs_map[vid] = conf
+            boxes.append((vid, box))
 
-            # Compute speed as Euclidean distance from last known position
-            if vid in vehicle_memory:
-                dx = cx - vehicle_memory[vid][0]
-                dy = cy - vehicle_memory[vid][1]
-                speed = math.sqrt(dx * dx + dy * dy)
-                speeds[vid] = speed
+            if vid in state.vehicle_memory:
+                dx = cx - state.vehicle_memory[vid][0]
+                dy = cy - state.vehicle_memory[vid][1]
+                speeds[vid] = math.sqrt(dx * dx + dy * dy)
             else:
-                # First time seeing this vehicle — no speed yet
-                speeds[vid] = 0
+                speeds[vid] = 0.0
 
-        # Update memory with current frame positions
-        vehicle_memory = centers.copy()
+        state.vehicle_memory = centers.copy()
 
-    # ---- Collision Detection ----
-    # Reset collision state for this frame
+    # Update decayed peak speed for each tracked vehicle.
+    # 0.92 decay ≈ peak halves every ~8 frames (0.27 s at 30 fps).
+    # A car braking gradually over 2 s (60 frames) loses its peak entirely by
+    # the time it stops; a collision (1–2 frames) keeps peak > SPEED_HIGH_THRESHOLD.
+    for vid in speeds:
+        prev_peak = state.speed_peak.get(vid, 0.0)
+        state.speed_peak[vid] = max(speeds[vid], prev_peak * 0.92)
+    # Remove stale entries for vehicles no longer visible
+    state.speed_peak = {v: p for v, p in state.speed_peak.items() if v in speeds}
+
+    # Collision / near-miss detection across all vehicle pairs
     collision_detected = False
-    collision_idA      = None
-    collision_idB      = None
-    collision_iou      = 0
-    collision_conf     = 0
+    collision_idA = collision_idB = None
+    collision_iou = collision_conf = 0.0
+    _collision_box_a = _collision_box_b = None
 
-    # Check all pairs of detected vehicles for collision conditions
     for (idA, boxA), (idB, boxB) in combinations(boxes, 2):
         iou = compute_iou(boxA, boxB)
+        if iou > max_iou:
+            max_iou = iou
 
-        if idA in speeds and idB in speeds:
-            speedA = speeds[idA]
-            speedB = speeds[idB]
+        # Near-miss: boxes approaching the collision threshold
+        if iou > IOU_THRESHOLD * 0.6:
+            near_misses += 1
 
-            # Collision is flagged if:
-            #   1. Bounding boxes overlap significantly (IoU above threshold)
-            #   2. At least one vehicle has slowed down (speed drop)
-            if (
-                iou > IOU_THRESHOLD
-                and (speedA < SPEED_DROP_THRESHOLD or speedB < SPEED_DROP_THRESHOLD)
-            ):
-                collision_detected = True
-                collision_idA  = idA
-                collision_idB  = idB
-                collision_iou  = iou
+        # ── Noise filters (skip before expensive proximity check) ─────────────
+        area_A = (boxA[2] - boxA[0]) * (boxA[3] - boxA[1])
+        area_B = (boxB[2] - boxB[0]) * (boxB[3] - boxB[1])
+        # 1. Tiny box → noise / distant reflection, not a real vehicle
+        if area_A < MIN_BOX_AREA or area_B < MIN_BOX_AREA:
+            continue
+        # 2. Highly mismatched sizes → tiny ghost paired with a real car
+        if min(area_A, area_B) / max(area_A, area_B) < MIN_BOX_SIZE_RATIO:
+            continue
+        # 3. At least one vehicle must have moved fast recently.
+        #    Guards against two cars that stopped normally at a red light.
+        if (state.speed_peak.get(idA, 0.0) < SPEED_HIGH_THRESHOLD and
+                state.speed_peak.get(idB, 0.0) < SPEED_HIGH_THRESHOLD):
+            continue
+        # ─────────────────────────────────────────────────────────────────────
 
-                # Average YOLO confidence of both vehicles involved
-                collision_conf = round(
-                    (confs_map.get(idA, 0) + confs_map.get(idB, 0)) / 2, 2
-                )
-                print(f"IoU: {iou:.2f} | Speeds: {speedA:.1f}, {speedB:.1f} | Conf: {collision_conf:.2f}")
-                break  # Only log the first detected collision pair per frame
+        # Collision detection uses proximity (gap ratio) instead of IoU.
+        # Reason: side-impact / T-bone crashes leave vehicles ADJACENT, not
+        # overlapping — IoU can be 0.00 on a real crash (as seen in practice).
+        # PROXIMITY_THRESHOLD=0.15 means boxes within ~15% of vehicle diagonal.
+        # iou < IOU_MAX_THRESHOLD still guards against duplicate detections (IoU~0.9).
+        gap_ratio = compute_box_gap_ratio(boxA, boxB)
+        if (
+            not collision_detected
+            and gap_ratio < PROXIMITY_THRESHOLD
+            and iou < IOU_MAX_THRESHOLD
+            and idA in speeds and idB in speeds
+            # BOTH vehicles must be slow — rules out one slow + one moving fast in same lane
+            and speeds[idA] < SPEED_DROP_THRESHOLD
+            and speeds[idB] < SPEED_DROP_THRESHOLD
+            and confs_map.get(idA, 0.0) >= MIN_PAIR_CONF
+            and confs_map.get(idB, 0.0) >= MIN_PAIR_CONF
+        ):
+            collision_detected = True
+            collision_idA  = idA
+            collision_idB  = idB
+            collision_iou  = iou
+            collision_conf = round(
+                (confs_map.get(idA, 0.0) + confs_map.get(idB, 0.0)) / 2, 2
+            )
+            _collision_box_a = [float(v) for v in boxA]
+            _collision_box_b = [float(v) for v in boxB]
 
-    # ---- Streak Counter ----
-    # Increment streak if collision detected this frame, otherwise decay it
-    if collision_detected:
-        collision_streak += 1
+    # Update streak (grows on collision, decays otherwise) and cooldown
+    state.collision_streak = (
+        state.collision_streak + 1 if collision_detected
+        else max(0, state.collision_streak - 1)
+    )
+    if state.cooldown > 0:
+        state.cooldown -= 1
+
+    return FrameFeatures(
+        cam_id=state.cam_id,
+        vehicle_count=len(boxes),
+        near_miss_count=near_misses,
+        max_iou=max_iou,
+        collision_detected=collision_detected,
+        collision_idA=collision_idA,
+        collision_idB=collision_idB,
+        collision_iou=collision_iou,
+        collision_conf=collision_conf,
+        frame=frame,
+        collision_box_a=_collision_box_a if collision_detected else None,
+        collision_box_b=_collision_box_b if collision_detected else None,
+        plotted_frame=plotted_frame,
+    )
+
+
+# ── Helper: Scene Fusion ───────────────────────────────────────────────────────
+
+def fuse_scenes(features_list: list, camera_states: list) -> dict:
+    """
+    Merge per-camera FrameFeatures into one scene dict for the Groq prompt.
+    """
+    per_camera = [
+        {
+            "cam_id":               feat.cam_id,
+            "online":               state.online,
+            "vehicle_count":        feat.vehicle_count,
+            "near_miss_count":      feat.near_miss_count,
+            "max_iou":              round(feat.max_iou, 2),
+            "collision_streak":     state.collision_streak,
+            "collision_detected":   feat.collision_detected,
+            # True if this camera has an active confirmed-incident TTL
+            "collision_confirmed":  state.display_collision_ttl > 0,
+        }
+        for feat, state in zip(features_list, camera_states)
+    ]
+    any_confirmed = any(s.display_collision_ttl > 0 for s in camera_states)
+    return {
+        "camera_count":        len(features_list),
+        "total_vehicles":      sum(f.vehicle_count for f in features_list),
+        "total_near_misses":   sum(f.near_miss_count for f in features_list),
+        "max_iou":             max((f.max_iou for f in features_list), default=0.0),
+        "cameras_with_streak": sum(1 for s in camera_states if s.collision_streak > 0),
+        "collision_confirmed": any_confirmed,
+        "per_camera":          per_camera,
+    }
+
+
+# ── Helper: Composite Image ────────────────────────────────────────────────────
+
+def build_composite_image(frames: list) -> str:
+    """
+    Tile camera frames into a grid JPEG for Groq vision.
+
+    Layout:
+      1 camera  → 640×480  (single tile, full quality)
+      2 cameras → 640×240  (side by side)
+      3 cameras → 2×2 grid, 640×480 (cam0 top-left, cam1 top-right, cam2 bottom-left, blank bottom-right)
+      4 cameras → 2×2 grid, 640×480
+
+    Keeping total composite ≤ 640×480 ensures Groq receives clear detail
+    without hitting token / size limits.
+    """
+    import math as _math
+
+    n = len(frames)
+    if n <= 2:
+        TILE_W, TILE_H = 640 // max(n, 1), 480
+        cols, rows = n, 1
     else:
-        collision_streak = max(0, collision_streak - 1)
+        # 2-column grid
+        cols = 2
+        rows = _math.ceil(n / cols)
+        TILE_W, TILE_H = 320, 240
 
-    # Decrement cooldown counter each frame
-    if cooldown > 0:
-        cooldown -= 1
+    tiles = []
+    for frame in frames:
+        if frame is None:
+            img = Image.new("RGB", (TILE_W, TILE_H), color=(20, 20, 20))
+        else:
+            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            img = Image.fromarray(rgb).resize((TILE_W, TILE_H))
+        tiles.append(img)
 
-    # ---- Incident Confirmation & Logging ----
-    # Only log if streak reaches threshold AND cooldown has expired
-    if collision_streak >= CONFIRMATION_FRAMES and cooldown == 0:
-        timestamp   = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        incident_id = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    # Pad to fill the grid
+    while len(tiles) < cols * rows:
+        tiles.append(Image.new("RGB", (TILE_W, TILE_H), color=(10, 10, 10)))
 
-        # Save a snapshot of the collision frame
-        snapshot_filename = f"snapshot_{incident_id}.jpg"
-        snapshot_path     = os.path.join(SNAPSHOT_DIR, snapshot_filename)
-        cv2.imwrite(snapshot_path, frame)
+    composite = Image.new("RGB", (TILE_W * cols, TILE_H * rows))
+    for idx, tile in enumerate(tiles):
+        col = idx % cols
+        row = idx // cols
+        composite.paste(tile, (TILE_W * col, TILE_H * row))
 
-        # Build the incident record
-        incident_data = {
-            "incident_id":   incident_id,
-            "incident_type": "vehicle_collision",
-            "timestamp":     timestamp,
-            "snapshot":      snapshot_filename,  # just the filename, NestJS handles the path
-            "vehicle_a":     int(collision_idA),
-            "vehicle_b":     int(collision_idB),
-            "iou":           round(float(collision_iou), 2),
-            "confidence":    float(collision_conf)
+    buf = io.BytesIO()
+    composite.save(buf, format="JPEG", quality=75)
+    return base64.b64encode(buf.getvalue()).decode("utf-8")
+
+
+# ── Helper: Algorithmic Risk Fallback ─────────────────────────────────────────
+
+def algorithmic_risk_score(scene: dict, reason: str = "fallback", collision: bool = False) -> dict:
+    """
+    Pure heuristic risk score used when Groq is unavailable.
+
+    If `collision=True` (proximity-based detection fired), the score is forced
+    to CRITICAL (0.95) regardless of IoU — because proximity collisions have
+    IoU≈0 by design (T-bone / side-impact) and would otherwise score LOW.
+
+    Score = weighted sum of:
+      - max IoU overlap             (50% weight — strongest collision signal)
+      - near-miss events            (15% per event, capped by formula)
+      - vehicle density             (2% per vehicle, up to 15 vehicles)
+      - cameras with active streak  (20% each)
+    """
+    if collision:
+        return {
+            "risk_score":         0.95,
+            "risk_level":         "CRITICAL",
+            "primary_factors":    ["proximity_collision"],
+            "reasoning":          "Collision detected (proximity): vehicles touching/overlapping.",
+            "recommended_action": "Dispatch emergency services immediately.",
+            "source":             "heuristic",
         }
 
-        # Load existing log entries (or start fresh if file doesn't exist)
-        logs = []
-        if os.path.exists(LOG_PATH):
-            with open(LOG_PATH, "r") as f:
-                try:
-                    logs = json.load(f)
-                except:
-                    logs = []
+    max_iou     = scene.get("max_iou", 0.0)
+    near_misses = scene.get("total_near_misses", 0)
+    vehicles    = min(scene.get("total_vehicles", 0), 15)
+    streaks     = scene.get("cameras_with_streak", 0)
 
-        # Append new incident and save
-        logs.append(incident_data)
-        with open(LOG_PATH, "w") as f:
-            json.dump(logs, f, indent=4)
+    score = min(1.0,
+        max_iou     * 0.50 +
+        near_misses * 0.15 +
+        vehicles    * 0.02 +
+        streaks     * 0.20
+    )
 
-        print(f"COLLISION CONFIRMED — Vehicle #{collision_idA} & #{collision_idB} | IoU: {collision_iou:.2f} | Conf: {collision_conf:.2f}")
+    if   score >= 0.80: level = "CRITICAL"
+    elif score >= 0.60: level = "HIGH"
+    elif score >= 0.30: level = "MEDIUM"
+    else:               level = "LOW"
 
-        # Reset streak and start cooldown to avoid duplicate logging
-        collision_streak = 0
-        cooldown = COOLDOWN_FRAMES
+    return {
+        "risk_score":         round(score, 2),
+        "risk_level":         level,
+        "primary_factors":    [reason],
+        "reasoning":          (
+            f"Heuristic: "
+            f"IoU={max_iou:.2f}, near_misses={near_misses}, "
+            f"vehicles={vehicles}, streaks={streaks}"
+        ),
+        "recommended_action": "Monitor intersection.",
+        "source":             "heuristic",
+    }
 
-    # ---- Display ----
-    # Show the annotated frame in a window
-    cv2.imshow("TRAFIQ AI", annotated_frame)
 
-    # Press ESC to stop the detection early
-    if cv2.waitKey(1) & 0xFF == 27:
-        break
+# ── Helper: Groq Risk Assessment ──────────────────────────────────────────────
 
-# ================= CLEANUP =================
-cap.release()
-cv2.destroyAllWindows()
-print("Detection complete.")
+def assess_risk(scene: dict, frames: list, last_risk: dict) -> dict:
+    """
+    Call Groq llama-3.2-11b-vision-preview with a composite camera image
+    and structured telemetry. Returns a risk dict on both success and failure.
+
+    Failure modes handled (all fall back to algorithmic_risk_score):
+      - RateLimitError     : too many requests — slow down
+      - APITimeoutError    : network timeout
+      - AuthenticationError: bad API key — disables Groq for this session
+      - APIConnectionError : Groq unreachable
+      - JSONDecodeError    : model returned non-JSON
+      - KeyError/ValueError: response missing required fields
+      - empty content      : model returned nothing
+    """
+    global ENABLE_RISK_ASSESSMENT, _groq_client
+    if not ENABLE_RISK_ASSESSMENT or _groq_client is None:
+        return algorithmic_risk_score(scene, reason="disabled")
+
+    # Skip Groq if there are no vehicles — no risk to assess
+    if scene["total_vehicles"] == 0:
+        return {
+            "risk_score":         0.0,
+            "risk_level":         "LOW",
+            "primary_factors":    ["no_vehicles"],
+            "reasoning":          "No vehicles detected in any camera.",
+            "recommended_action": "Normal monitoring.",
+            "source":             "heuristic",
+        }
+
+    try:
+        composite_b64 = build_composite_image(frames)
+        messages      = build_risk_prompt(scene, last_risk, composite_b64)
+
+        t0 = time.monotonic()
+        response = _groq_client.chat.completions.create(
+            model="meta-llama/llama-4-scout-17b-16e-instruct",
+            messages=messages,
+            max_tokens=300,
+            temperature=0.1,
+        )
+        latency_ms = round((time.monotonic() - t0) * 1000)
+
+        content = response.choices[0].message.content
+        if not content or not content.strip():
+            logger.warning("Groq returned empty content — heuristic fallback")
+            return algorithmic_risk_score(scene, reason="empty_response")
+
+        # Strip markdown code fences that some models add despite instructions
+        text = content.strip()
+        if "```" in text:
+            parts = text.split("```")
+            text = parts[1].lstrip("json").strip() if len(parts) > 1 else text
+
+        result = json.loads(text)
+
+        # Sanitise output
+        result["risk_score"] = max(0.0, min(1.0, float(result.get("risk_score", 0.0))))
+        result["risk_level"] = str(result.get("risk_level", "UNKNOWN")).upper()
+        result["source"]     = "groq"
+
+        logger.info(
+            "Groq risk: %.2f [%s] latency=%dms — %s",
+            result["risk_score"], result["risk_level"], latency_ms,
+            str(result.get("reasoning", ""))[:80],
+        )
+        return result
+
+    except groq_sdk.RateLimitError:
+        logger.warning("Groq rate limit — heuristic fallback. Increase RISK_FRAME_INTERVAL.")
+        return algorithmic_risk_score(scene, reason="rate_limited")
+
+    except groq_sdk.APITimeoutError:
+        logger.warning("Groq timeout — heuristic fallback")
+        return algorithmic_risk_score(scene, reason="timeout")
+
+    except groq_sdk.AuthenticationError:
+        logger.error(
+            "Groq authentication failed — check GROQ_API_KEY. "
+            "Disabling Groq for this session."
+        )
+        # Disable for remainder of session to avoid spamming failed auth requests
+        ENABLE_RISK_ASSESSMENT = False
+        _groq_client           = None
+        return algorithmic_risk_score(scene, reason="auth_error")
+
+    except (groq_sdk.APIConnectionError, groq_sdk.APIError) as exc:
+        logger.warning("Groq API error: %s — heuristic fallback", exc)
+        return algorithmic_risk_score(scene, reason="api_error")
+
+    except json.JSONDecodeError as exc:
+        logger.warning("Groq non-JSON response: %s — heuristic fallback", exc)
+        return algorithmic_risk_score(scene, reason="parse_error")
+
+    except (KeyError, ValueError, TypeError) as exc:
+        logger.warning("Groq response schema invalid: %s — heuristic fallback", exc)
+        return algorithmic_risk_score(scene, reason="schema_error")
+
+
+# ── Helper: Incident Persistence ──────────────────────────────────────────────
+
+def _annotate_frame(frame, feat: FrameFeatures, label: str):
+    """
+    Draw collision bounding boxes and an info banner onto a copy of the frame.
+    Returns the annotated copy without mutating the original.
+    """
+    import numpy as np
+    out = frame.copy()
+    h, w = out.shape[:2]
+
+    # Draw red boxes around the two colliding vehicles
+    for box in (feat.collision_box_a, feat.collision_box_b):
+        if box is None:
+            continue
+        x1, y1, x2, y2 = (int(v) for v in box)
+        cv2.rectangle(out, (x1, y1), (x2, y2), (0, 0, 220), 3)
+
+    # Semi-transparent dark banner at the bottom
+    banner_h = 52
+    overlay  = out.copy()
+    cv2.rectangle(overlay, (0, h - banner_h), (w, h), (0, 0, 0), -1)
+    cv2.addWeighted(overlay, 0.55, out, 0.45, 0, out)
+
+    # Text lines
+    font       = cv2.FONT_HERSHEY_DUPLEX
+    small_font = cv2.FONT_HERSHEY_SIMPLEX
+    cv2.putText(out, "COLLISION DETECTED", (8, h - banner_h + 22),
+                font, 0.65, (0, 60, 255), 2, cv2.LINE_AA)
+    cv2.putText(out,
+                f"IoU={feat.collision_iou:.2f}  Conf={feat.collision_conf:.2f}  {label}",
+                (8, h - banner_h + 44),
+                small_font, 0.48, (200, 200, 200), 1, cv2.LINE_AA)
+    return out
+
+
+def save_incident(
+    state: CameraState,
+    feat: FrameFeatures,
+    last_risk: dict,
+) -> Optional[str]:
+    """
+    Confirm and persist a collision incident.
+
+    Fires only when collision_streak >= CONFIRMATION_FRAMES AND cooldown == 0.
+    Saves an annotated JPEG snapshot and appends to incidents.jsonl.
+    Returns the snapshot filename, or None if not yet confirmed.
+    """
+    if state.collision_streak < CONFIRMATION_FRAMES or state.cooldown > 0:
+        return None
+
+    now           = datetime.datetime.now()
+    incident_id   = now.strftime("%Y%m%d_%H%M%S") + f"_cam{feat.cam_id}"
+    snap_filename = f"snapshot_{incident_id}.jpg"
+    snap_path     = os.path.join(SNAPSHOT_DIR, snap_filename)
+
+    # Write annotated snapshot to disk
+    if feat.frame is not None:
+        try:
+            ts_label  = now.strftime("%Y-%m-%d %H:%M:%S")
+            annotated = _annotate_frame(feat.frame, feat, ts_label)
+            cv2.imwrite(snap_path, annotated)
+        except OSError as exc:
+            logger.error("Snapshot write failed: %s", exc)
+
+    incident_data = {
+        "incident_id":   incident_id,
+        "incident_type": "vehicle_collision",
+        "timestamp":     now.strftime("%Y-%m-%d %H:%M:%S"),
+        "snapshot":      snap_filename,
+        "vehicle_a":     int(feat.collision_idA) if feat.collision_idA is not None else -1,
+        "vehicle_b":     int(feat.collision_idB) if feat.collision_idB is not None else -1,
+        "iou":           round(float(feat.collision_iou), 2),
+        "confidence":    float(feat.collision_conf),
+        "camera_id":     f"cam{feat.cam_id}",
+        # risk assessment at the moment of incident
+        "risk_score":    last_risk.get("risk_score", 0.0),
+        "risk_level":    last_risk.get("risk_level", "UNKNOWN"),
+        "risk_reason":   last_risk.get("reasoning", ""),
+    }
+
+    # Append incident to JSONL file (one JSON object per line)
+    try:
+        with open(INCIDENTS_FILE, "a", encoding="utf-8") as fh:
+            fh.write(json.dumps(incident_data) + "\n")
+    except OSError as exc:
+        logger.error("Incident file write failed: %s", exc)
+
+    # Reset to prevent duplicate logging
+    state.collision_streak = 0
+    state.cooldown         = COOLDOWN_FRAMES
+
+    logger.info(
+        "COLLISION CONFIRMED — CAM-%d | #%s vs #%s | IoU=%.2f | Conf=%.2f | Risk=%s",
+        feat.cam_id, feat.collision_idA, feat.collision_idB,
+        feat.collision_iou, feat.collision_conf,
+        last_risk.get("risk_level", "?"),
+    )
+    return snap_filename
+
+
+# ── Helper: Live Display Overlay ──────────────────────────────────────────────
+
+_RISK_COLORS = {
+    "LOW":      (0,   200,  60),   # green
+    "MEDIUM":   (0,   200, 220),   # yellow (BGR)
+    "HIGH":     (0,   140, 255),   # orange
+    "CRITICAL": (0,    30, 220),   # red
+}
+
+def _draw_display(feat: FrameFeatures, last_risk: dict, cam_state: CameraState) -> object:
+    """
+    Compose the live display frame:
+      - YOLO-plotted boxes (track IDs + confidence) as background
+      - Red boxes flashing on the colliding pair
+      - Top banner: camera ID, vehicle count, near-misses
+      - Bottom banner: risk level (color-coded) + reasoning snippet
+    """
+    base = feat.plotted_frame if feat.plotted_frame is not None else (
+        feat.frame.copy() if feat.frame is not None else None
+    )
+    if base is None:
+        return None
+
+    h, w = base.shape[:2]
+    font   = cv2.FONT_HERSHEY_DUPLEX
+    small  = cv2.FONT_HERSHEY_SIMPLEX
+
+    # ── Collision flash: thick red boxes on the colliding pair ────────────
+    # Show either the live detection OR the lingering overlay (TTL > 0)
+    show_collision = feat.collision_detected or cam_state.display_collision_ttl > 0
+    _box_a = feat.collision_box_a if feat.collision_detected else cam_state.display_box_a
+    _box_b = feat.collision_box_b if feat.collision_detected else cam_state.display_box_b
+
+    if show_collision:
+        for box in (_box_a, _box_b):
+            if box:
+                x1, y1, x2, y2 = (int(v) for v in box)
+                cv2.rectangle(base, (x1, y1), (x2, y2), (0, 0, 255), 4)
+                cv2.rectangle(base, (x1-2, y1-2), (x2+2, y2+2), (0, 0, 180), 2)
+
+    # ── Top banner: camera info ───────────────────────────────────────────
+    overlay = base.copy()
+    cv2.rectangle(overlay, (0, 0), (w, 36), (20, 20, 20), -1)
+    cv2.addWeighted(overlay, 0.6, base, 0.4, 0, base)
+
+    status = "ONLINE" if cam_state.online else "OFFLINE"
+    top_text = (
+        f"CAM-{feat.cam_id}  [{status}]   "
+        f"Vehicles: {feat.vehicle_count}   "
+        f"Near-miss: {feat.near_miss_count}   "
+        f"Max IoU: {feat.max_iou:.2f}"
+    )
+    cv2.putText(base, top_text, (8, 24), small, 0.50, (220, 220, 220), 1, cv2.LINE_AA)
+
+    # ── Bottom banner: risk level ─────────────────────────────────────────
+    level  = last_risk.get("risk_level", "LOW")
+    score  = last_risk.get("risk_score", 0.0)
+    reason = str(last_risk.get("reasoning", ""))[:72]
+    color  = _RISK_COLORS.get(level, (200, 200, 200))
+
+    overlay2 = base.copy()
+    cv2.rectangle(overlay2, (0, h - 54), (w, h), (15, 15, 15), -1)
+    cv2.addWeighted(overlay2, 0.65, base, 0.35, 0, base)
+
+    # Filled risk badge
+    badge_w = 130
+    cv2.rectangle(base, (0, h - 54), (badge_w, h), color, -1)
+    cv2.putText(base, level, (6, h - 54 + 26), font, 0.70, (10, 10, 10), 2, cv2.LINE_AA)
+    cv2.putText(base, f"score {score:.2f}", (6, h - 54 + 46), small, 0.42, (30, 30, 30), 1, cv2.LINE_AA)
+
+    # Reasoning text
+    cv2.putText(base, reason, (badge_w + 8, h - 54 + 22), small, 0.42, (200, 200, 200), 1, cv2.LINE_AA)
+
+    # Collision alert text (show while live or while TTL > 0)
+    if show_collision:
+        if feat.collision_detected:
+            alert = f"!! COLLISION  IoU={feat.collision_iou:.2f}  Conf={feat.collision_conf:.2f}"
+        else:
+            # Lingering: show TTL countdown so user sees it fading out
+            alert = f"!! COLLISION (confirmed)  [{cam_state.display_collision_ttl}f remaining]"
+        cv2.putText(base, alert, (badge_w + 8, h - 54 + 44), small, 0.46, (60, 60, 255), 1, cv2.LINE_AA)
+
+    return base
+
+
+# ── Helper: Event Push ─────────────────────────────────────────────────────────
+
+def _to_json_safe(obj):
+    """Recursively convert numpy scalars to Python native types."""
+    if isinstance(obj, dict):
+        return {k: _to_json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_to_json_safe(v) for v in obj]
+    # numpy scalars (float32, int64, …) expose .item() → Python native
+    if hasattr(obj, 'item'):
+        return obj.item()
+    return obj
+
+
+def _push_event(event_name: str, payload: dict) -> None:
+    """Emit a socket.io event to NestJS. Silent no-op if not connected."""
+    if sio.connected:
+        try:
+            sio.emit(event_name, _to_json_safe(payload))
+        except Exception as exc:
+            logger.warning("[WS] emit '%s' failed: %s", event_name, exc)
+
+
+# ── Groq Background Worker ────────────────────────────────────────────────────
+
+def _groq_worker() -> None:
+    """
+    Runs in a daemon thread.  Consumes (scene, frames, prev_risk, frame_count)
+    tuples from _groq_queue, calls assess_risk(), writes the result into the
+    shared _groq_result dict, and pushes a risk_event over socket.io.
+
+    Sending None is the shutdown sentinel.
+    """
+    while True:
+        item = _groq_queue.get()
+        if item is None:                        # shutdown sentinel
+            _groq_queue.task_done()
+            return
+        scene, frames, prev_risk, fc = item
+        risk = assess_risk(scene, frames, prev_risk)
+        with _groq_result_lock:
+            _groq_result.clear()
+            _groq_result.update(risk)
+        _push_event("risk_event", {
+            **risk,
+            "frame_count": fc,
+            "timestamp":   datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "scene_summary": {
+                "total_vehicles":      scene["total_vehicles"],
+                "total_near_misses":   scene["total_near_misses"],
+                "cameras_with_streak": scene["cameras_with_streak"],
+            },
+        })
+        _groq_queue.task_done()
+
+
+# ── Camera Initialisation ──────────────────────────────────────────────────────
+
+def init_cameras(sources: list) -> list[CameraState]:
+    """
+    Open a VideoCapture for each source URL.
+    Raises RuntimeError if no camera could be opened at all.
+    """
+    states = []
+    for i, url in enumerate(sources):
+        cap = cv2.VideoCapture(url)
+        if cap.isOpened():
+            logger.info("[CAM-%d] Opened: %s", i, url)
+        else:
+            logger.warning("[CAM-%d] Could not open: %s — will retry on first failed read", i, url)
+        states.append(CameraState(cam_id=i, url=url, cap=cap, online=cap.isOpened()))
+
+    if not any(s.online for s in states):
+        raise RuntimeError(
+            "No camera sources could be opened.\n"
+            "Check RTSP_CAM_* values in .env or ensure accident0.mp4 exists."
+        )
+    return states
+
+
+# ── Main Loop ──────────────────────────────────────────────────────────────────
+
+def main() -> None:
+    logger.info("=== TRAFIQ Engine Starting ===")
+    logger.info("  Cameras           : %d  (%s)", len(CAMERA_SOURCES),
+                ", ".join(CAMERA_SOURCES))
+    logger.info("  Risk assessment   : %s", "ENABLED" if ENABLE_RISK_ASSESSMENT else "DISABLED")
+    logger.info("  Groq min interval : %.1f s  (env: MIN_GROQ_INTERVAL_S)", float(os.environ.get("MIN_GROQ_INTERVAL_S", "15.0")))
+    logger.info("  NestJS URL        : %s", NESTJS_URL)
+    logger.info("  Incidents file    : %s", INCIDENTS_FILE)
+
+    connect_to_nestjs()
+    camera_states = init_cameras(CAMERA_SOURCES)
+
+    # Start Groq background thread — Groq calls never block the video loop
+    _groq_thread = threading.Thread(target=_groq_worker, daemon=True, name="groq-worker")
+    _groq_thread.start()
+
+    frame_count         = 0
+    last_risk           = {"risk_score": 0.0, "risk_level": "LOW", "source": "init"}
+    _last_groq_ts       = 0.0    # wall-clock time of last Groq submission
+    # Min gap between Groq calls even during a collision — avoids rate limits.
+    # Groq is only called on collision; normal traffic uses instant heuristic.
+    MIN_GROQ_GAP_S      = float(os.environ.get("MIN_GROQ_INTERVAL_S", "15.0"))
+    _prev_any_collision = False
+
+    while True:
+        frame_count   += 1
+        features_list  = []
+
+        # ── Step 1: Read + detect per camera (sequential) ──────────────────────
+        for state in camera_states:
+            ret, frame = state.cap.read()
+
+            if not ret:
+                # Video file — loop back to start (dev/demo mode)
+                is_video_file = state.url.endswith((".mp4", ".avi", ".mkv", ".mov"))
+                if is_video_file:
+                    state.cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                    ret, frame = state.cap.read()
+                    if not ret:
+                        logger.warning("[CAM-%d] Video loop failed — using last frame", state.cam_id)
+                        features_list.append(_offline_features(state))
+                        continue
+                else:
+                    # RTSP drop — attempt reconnect
+                    logger.warning("[CAM-%d] Stream read failed — reconnecting", state.cam_id)
+                    _push_event("camera_status", {"cam_id": state.cam_id, "status": "reconnecting"})
+                    if not reconnect_camera(state):
+                        features_list.append(_offline_features(state))
+                        continue
+                    ret, frame = state.cap.read()
+                    if not ret:
+                        features_list.append(_offline_features(state))
+                        continue
+
+            state.last_good_frame = frame
+            feat = extract_features(state, frame)
+
+            # ── Update lingering collision display TTL ──────────────────────────
+            if feat.collision_detected:
+                # Each detected frame resets the latch to 30 frames
+                state.display_collision_ttl = 30
+                state.display_box_a = feat.collision_box_a
+                state.display_box_b = feat.collision_box_b
+            elif state.display_collision_ttl > 0:
+                state.display_collision_ttl -= 1
+
+            features_list.append(feat)
+
+            # ── Step 2: Collision confirmation per camera ───────────────────────
+            snap_file = save_incident(state, feat, last_risk)
+            if snap_file:
+                # Keep overlay visible for the full cooldown so the user sees it
+                state.display_collision_ttl = COOLDOWN_FRAMES
+                _push_event("incident_confirmed", {
+                    "cam_id":     feat.cam_id,
+                    "snapshot":   snap_file,
+                    "vehicle_a":  feat.collision_idA,
+                    "vehicle_b":  feat.collision_idB,
+                    "iou":        round(feat.collision_iou, 2),
+                    "confidence": feat.collision_conf,
+                    "timestamp":  datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "risk_score": last_risk.get("risk_score", 0.0),
+                    "risk_level": last_risk.get("risk_level", "UNKNOWN"),
+                })
+
+        if not features_list:
+            continue
+
+        # ── Step 3: Risk assessment ────────────────────────────────────────────
+        # • Collision active  → submit to Groq background thread (non-blocking).
+        #   First collision frame always triggers; subsequent ones respect MIN_GROQ_GAP_S
+        #   so we don't spam the API while the crash is still in frame.
+        # • Normal traffic    → instant heuristic, zero API calls.
+        #
+        # any_collision includes cameras with active TTL so that risk stays HIGH/CRITICAL
+        # even when per-frame collision_detected drops to False (cars already stopped).
+        any_collision = (
+            any(f.collision_detected for f in features_list)
+            or any(s.display_collision_ttl > 0 for s in camera_states)
+        )
+        _force_groq     = any_collision and not _prev_any_collision   # first collision frame
+        _prev_any_collision = any_collision
+
+        scene = fuse_scenes(features_list, camera_states)
+
+        # Pull latest Groq result first so we can inspect it before deciding to submit
+        with _groq_result_lock:
+            _latest = dict(_groq_result)
+
+        # Only submit to Groq when:
+        #   _force_groq  → brand-new collision transition (always trigger once)
+        #   OR the gap elapsed AND we don't already have a fresh Groq result for
+        #      this collision window (avoids spamming during the 400-frame TTL).
+        _have_groq_result = _latest.get("source") == "groq"
+        _groq_gap_ok      = time.monotonic() - _last_groq_ts >= MIN_GROQ_GAP_S
+        if any_collision and (_force_groq or (not _have_groq_result and _groq_gap_ok)):
+            _last_groq_ts = time.monotonic()
+            try:
+                _groq_queue.put_nowait(
+                    (scene, [f.frame for f in features_list], dict(last_risk), frame_count)
+                )
+            except queue.Full:
+                pass   # worker still busy with last request — skip, use cached result
+
+        if _latest.get("source") == "groq" and any_collision:
+            last_risk = _latest
+        else:
+            # Collision cleared — wipe the Groq cache so old HIGH/CRITICAL labels
+            # don't persist into normal traffic display
+            if not any_collision and _latest.get("source") == "groq":
+                with _groq_result_lock:
+                    _groq_result.clear()
+                    _groq_result.update({"risk_score": 0.0, "risk_level": "LOW", "source": "init"})
+            # Pass collision=any_collision so proximity crashes (IoU≈0) still score CRITICAL
+            # while Groq is warming up or between calls.
+            last_risk = algorithmic_risk_score(scene, reason="normal_traffic", collision=any_collision)
+
+        # ── Step 4: Live display window ────────────────────────────────────────
+        if SHOW_DISPLAY:
+            for feat, state in zip(features_list, camera_states):
+                disp = _draw_display(feat, last_risk, state)
+                if disp is not None:
+                    cv2.imshow(f"TRAFIQ — CAM-{feat.cam_id}", disp)
+            if cv2.waitKey(1) & 0xFF == 27:   # ESC to quit
+                logger.info("ESC pressed — stopping engine")
+                break
+
+    # Cleanup
+    logger.info("Shutting down...")
+    for state in camera_states:
+        state.cap.release()
+    cv2.destroyAllWindows()
+    # Stop Groq worker thread gracefully
+    try:
+        _groq_queue.put_nowait(None)   # sentinel
+    except queue.Full:
+        pass
+    _groq_thread.join(timeout=5)
+    if sio.connected:
+        sio.disconnect()
+    logger.info("Engine stopped.")
+
+
+def _offline_features(state: CameraState) -> FrameFeatures:
+    """Return a zeroed FrameFeatures for a camera that failed to produce a frame."""
+    return FrameFeatures(
+        cam_id=state.cam_id,
+        vehicle_count=0,
+        near_miss_count=0,
+        max_iou=0.0,
+        collision_detected=False,
+        collision_idA=None,
+        collision_idB=None,
+        collision_iou=0.0,
+        collision_conf=0.0,
+        frame=state.last_good_frame,   # stale frame as placeholder
+    )
+
+
+if __name__ == "__main__":
+    main()

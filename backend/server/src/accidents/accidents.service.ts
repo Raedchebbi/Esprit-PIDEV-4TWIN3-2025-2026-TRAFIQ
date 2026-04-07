@@ -1,29 +1,35 @@
 import { Injectable } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
-import { Accident, AccidentDocument } from './accident.schema';
 import * as fs from 'fs';
 import * as path from 'path';
+import { Accident } from './accident.schema';
 
 @Injectable()
 export class AccidentsService {
-  constructor(@InjectModel(Accident.name) private accidentModel: Model<AccidentDocument>) {}
+  // Python AI engine appends one JSON object per line to this file.
+  private readonly incidentsFile = path.resolve(
+    process.cwd(),
+    '../ai-engine/incidents.jsonl',
+  );
 
-  async syncFromJson() {
-    const filePath = path.resolve(process.cwd(), '../ai-engine/incidents_log.json');
-    if (!fs.existsSync(filePath)) return;
-
-    const raw = fs.readFileSync(filePath, 'utf-8');
-    const logs = JSON.parse(raw);
-
-    for (const log of logs) {
-      const exists = await this.accidentModel.findOne({ incident_id: log.incident_id });
-      if (!exists) await this.accidentModel.create(log);
+  findAll(): Accident[] {
+    if (!fs.existsSync(this.incidentsFile)) {
+      return [];
     }
-  }
+    const raw = fs.readFileSync(this.incidentsFile, 'utf8');
+    const incidents: Accident[] = raw
+      .split('\n')
+      .filter((line) => line.trim())
+      .map((line) => {
+        try {
+          return JSON.parse(line) as Accident;
+        } catch {
+          return null;
+        }
+      })
+      .filter((item): item is Accident => item !== null)
+      .reverse()
+      .slice(0, 100);
 
-  async findAll() {
-    await this.syncFromJson();
-    return this.accidentModel.find().sort({ timestamp: -1 });
+    return incidents;
   }
 }
