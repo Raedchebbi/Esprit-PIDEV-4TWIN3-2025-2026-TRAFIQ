@@ -71,36 +71,44 @@ _raw_sources = [
     os.environ.get("RTSP_CAM_0"),
     os.environ.get("RTSP_CAM_1"),
     os.environ.get("RTSP_CAM_2"),
+    os.environ.get("RTSP_CAM_3"),
+    os.environ.get("RTSP_CAM_4"),
 ]
 CAMERA_SOURCES: list[str] = [s for s in _raw_sources if s]
 if not CAMERA_SOURCES:
-    _fallback = os.path.join(BASE_DIR, "accident0.mp4")
-    CAMERA_SOURCES = [_fallback]
+    _fallback_candidates = [
+        os.path.join(BASE_DIR, "accident.mp4"),
+        os.path.join(BASE_DIR, "accident0.mp4"),
+    ]
+    CAMERA_SOURCES = [src for src in _fallback_candidates if os.path.exists(src)]
+    if not CAMERA_SOURCES:
+        _fallback = os.path.join(BASE_DIR, "accident.mp4")
+        CAMERA_SOURCES = [_fallback]
     logger.warning(
-        "No RTSP_CAM_* env vars found — using fallback video: %s", _fallback
+        "No RTSP_CAM_* env vars found — using fallback sources: %s",
+        ", ".join(CAMERA_SOURCES),
     )
 
 MODEL_PATH             = os.path.join(BASE_DIR, "models", "vehicule-model.pt")
 SNAPSHOT_DIR           = os.path.join(BASE_DIR, "snapshots")
-BASE_CONF              = float(os.environ.get("BASE_CONF", "0.4"))
+BASE_CONF              = float(os.environ.get("BASE_CONF", "0.35"))
 IOU_THRESHOLD          = float(os.environ.get("IOU_THRESHOLD", "0.4"))
 # IoU > this value = duplicate detection of same object, not a real collision
 IOU_MAX_THRESHOLD      = float(os.environ.get("IOU_MAX_THRESHOLD", "0.85"))
 # Collision proximity: boxes within this fraction of avg vehicle diagonal are "colliding".
-# 0.15 = within ~15% of vehicle size — catches side-impact / T-bone (IoU can be 0 in aftermath).
-PROXIMITY_THRESHOLD    = float(os.environ.get("PROXIMITY_THRESHOLD", "0.15"))
+PROXIMITY_THRESHOLD    = float(os.environ.get("PROXIMITY_THRESHOLD", "0.18"))
 # Both vehicles in a collision pair must individually meet this confidence
-MIN_PAIR_CONF          = float(os.environ.get("MIN_PAIR_CONF", "0.45"))
-SPEED_DROP_THRESHOLD   = float(os.environ.get("SPEED_DROP_THRESHOLD", "15"))
+MIN_PAIR_CONF          = float(os.environ.get("MIN_PAIR_CONF", "0.50"))
+SPEED_DROP_THRESHOLD   = float(os.environ.get("SPEED_DROP_THRESHOLD", "12"))
 # Minimum box area (px²) — boxes smaller than this are noise/distant reflections, not vehicles
-MIN_BOX_AREA           = float(os.environ.get("MIN_BOX_AREA", "3500"))
+MIN_BOX_AREA           = float(os.environ.get("MIN_BOX_AREA", "3000"))
 # A collision pair must have similar-sized boxes: smaller/larger ratio must exceed this
-MIN_BOX_SIZE_RATIO     = float(os.environ.get("MIN_BOX_SIZE_RATIO", "0.20"))
+MIN_BOX_SIZE_RATIO     = float(os.environ.get("MIN_BOX_SIZE_RATIO", "0.25"))
 # If a vehicle's decayed peak speed (px/frame) never exceeded this, it was never moving
 # fast enough to have been in a real crash (distinguishes normal red-light stop from crash)
-SPEED_HIGH_THRESHOLD   = float(os.environ.get("SPEED_HIGH_THRESHOLD", "10.0"))
+SPEED_HIGH_THRESHOLD   = float(os.environ.get("SPEED_HIGH_THRESHOLD", "8.0"))
 CONFIRMATION_FRAMES    = int(os.environ.get("CONFIRMATION_FRAMES", "3"))
-COOLDOWN_FRAMES        = int(os.environ.get("COOLDOWN_FRAMES", "400"))
+COOLDOWN_FRAMES        = int(os.environ.get("COOLDOWN_FRAMES", "500"))
 RISK_FRAME_INTERVAL    = int(os.environ.get("RISK_FRAME_INTERVAL", "60"))
 ENABLE_RISK_ASSESSMENT = os.environ.get("ENABLE_RISK_ASSESSMENT", "true").lower() == "true"
 NESTJS_URL             = os.environ.get("NESTJS_URL", "http://localhost:3000")
@@ -127,7 +135,7 @@ if not os.path.exists(MODEL_PATH):
         "Place your .pt weights file inside backend/ai-engine/models/"
     )
 vehicle_model = YOLO(MODEL_PATH)
-logger.info("Model loaded.")
+logger.info("Model loaded. Classes: %s", vehicle_model.names)
 
 
 # ── Socket.io Client (Python → NestJS) ────────────────────────────────────────
@@ -137,6 +145,7 @@ sio = socketio.Client(
     reconnection_delay=2,
     logger=False,
     engineio_logger=False,
+    handle_sigint=False,
 )
 
 @sio.event
@@ -197,6 +206,11 @@ class CameraState:
     display_box_a:    Optional[list] = None  # last confirmed colliding box A (lingering display)
     display_box_b:    Optional[list] = None  # last confirmed colliding box B
     speed_peak:       dict = field(default_factory=dict)  # {vid: decayed peak speed} for recent-movement check
+
+
+def _open_capture(url: str) -> cv2.VideoCapture:
+    """Open a camera/video stream."""
+    return cv2.VideoCapture(url)
 
 
 @dataclass
@@ -273,7 +287,7 @@ def reconnect_camera(state: CameraState) -> bool:
             state.cam_id, attempt, MAX_RECONNECT_ATTEMPTS, delay,
         )
         time.sleep(delay)
-        cap = cv2.VideoCapture(state.url)
+        cap = _open_capture(state.url)
         if cap.isOpened():
             state.cap    = cap
             state.online = True
@@ -301,9 +315,31 @@ def extract_features(state: CameraState, frame) -> FrameFeatures:
     Near-miss: any pair with IoU > IOU_THRESHOLD * 0.6 (approaching threshold).
     Collision : IoU > IOU_THRESHOLD AND at least one vehicle nearly stopped.
     """
-    # iou=0.45 tightens YOLO's internal NMS so near-identical boxes get merged
-    # before the tracker ever assigns them separate IDs.
-    results = vehicle_model.track(frame, persist=True, conf=BASE_CONF, iou=0.45, verbose=False)
+    # Use predict() instead of track() — using track(persist=True) with a single
+    # model across multiple cameras corrupts ByteTrack's internal state (it tries
+    # to match cam0 objects in cam1's frame).  We compute our own inter-frame
+    # matching via vehicle_memory centers, so built-in tracking is not needed.
+    try:
+        results = vehicle_model.predict(frame, conf=BASE_CONF, iou=0.45, verbose=False)
+    except KeyboardInterrupt:
+        raise
+    except BaseException as exc:
+        logger.exception("[CAM-%d] YOLO predict failed on frame: %s", state.cam_id, exc)
+        return FrameFeatures(
+            cam_id=state.cam_id,
+            vehicle_count=0,
+            near_miss_count=0,
+            max_iou=0.0,
+            collision_detected=False,
+            collision_idA=None,
+            collision_idB=None,
+            collision_iou=0.0,
+            collision_conf=0.0,
+            frame=frame,
+            collision_box_a=None,
+            collision_box_b=None,
+            plotted_frame=frame.copy() if SHOW_DISPLAY and frame is not None else None,
+        )
 
     # YOLO-rendered frame (boxes + track IDs) — only used for live display
     plotted_frame = results[0].plot() if SHOW_DISPLAY else None
@@ -315,38 +351,50 @@ def extract_features(state: CameraState, frame) -> FrameFeatures:
     near_misses = 0
     max_iou     = 0.0
 
-    if results[0].boxes.id is not None:
-        ids   = results[0].boxes.id.cpu().numpy()
-        xyxy  = results[0].boxes.xyxy.cpu().numpy()
-        confs = results[0].boxes.conf.cpu().numpy()
+    raw_xyxy  = results[0].boxes.xyxy.cpu().numpy()
+    raw_confs = results[0].boxes.conf.cpu().numpy()
 
-        # ── Post-track deduplication ─────────────────────────────────────────
-        # YOLO NMS is class-aware: a "car" and a "truck" box on the same vehicle
-        # both survive NMS and get separate track IDs.  Remove the lower-confidence
-        # box from any pair that still overlaps by more than 60 %.
+    if len(raw_xyxy) > 0:
+        # ── Post-detection deduplication ──────────────────────────────────────
         _raw = sorted(
-            zip(ids, xyxy, confs),
+            zip(range(len(raw_xyxy)), raw_xyxy, raw_confs),
             key=lambda t: float(t[2]),
-            reverse=True,              # highest confidence first
+            reverse=True,
         )
         _kept_boxes: list[list] = []
-        _kept_ids:   list[int]  = []
         _kept_confs: list[float] = []
-        for _id, _box, _conf in _raw:
+        for _idx, _box, _conf in _raw:
             _duplicate = any(
                 compute_iou([float(v) for v in _box], _kb) > 0.60
                 for _kb in _kept_boxes
             )
             if not _duplicate:
                 _kept_boxes.append([float(v) for v in _box])
-                _kept_ids.append(int(_id))
                 _kept_confs.append(float(_conf))
-        # ─────────────────────────────────────────────────────────────────────
 
-        for vid, box, conf in zip(_kept_ids, _kept_boxes, _kept_confs):
+        # Assign IDs by matching to previous frame's centers (nearest-neighbor)
+        _next_id = getattr(state, '_next_vid', state.cam_id * 10000)
+        for box, conf in zip(_kept_boxes, _kept_confs):
             x1, y1, x2, y2 = box
             cx = (x1 + x2) / 2
             cy = (y1 + y2) / 2
+
+            # Match to nearest previous-frame center for ID continuity
+            best_vid = None
+            best_dist = 80.0  # max pixels to consider same vehicle
+            for prev_vid, (px, py) in state.vehicle_memory.items():
+                if prev_vid in centers:  # already claimed
+                    continue
+                d = math.sqrt((cx - px) ** 2 + (cy - py) ** 2)
+                if d < best_dist:
+                    best_dist = d
+                    best_vid = prev_vid
+            if best_vid is not None:
+                vid = best_vid
+            else:
+                vid = _next_id
+                _next_id += 1
+
             centers[vid]   = (cx, cy)
             confs_map[vid] = conf
             boxes.append((vid, box))
@@ -358,6 +406,7 @@ def extract_features(state: CameraState, frame) -> FrameFeatures:
             else:
                 speeds[vid] = 0.0
 
+        state._next_vid = _next_id
         state.vehicle_memory = centers.copy()
 
     # Update decayed peak speed for each tracked vehicle.
@@ -376,6 +425,10 @@ def extract_features(state: CameraState, frame) -> FrameFeatures:
     collision_iou = collision_conf = 0.0
     _collision_box_a = _collision_box_b = None
 
+    # Debug: track best candidate per frame for periodic logging
+    _dbg_best_gap = 999.0
+    _dbg_best_pair = None
+
     for (idA, boxA), (idB, boxB) in combinations(boxes, 2):
         iou = compute_iou(boxA, boxB)
         if iou > max_iou:
@@ -392,21 +445,30 @@ def extract_features(state: CameraState, frame) -> FrameFeatures:
         if area_A < MIN_BOX_AREA or area_B < MIN_BOX_AREA:
             continue
         # 2. Highly mismatched sizes → tiny ghost paired with a real car
-        if min(area_A, area_B) / max(area_A, area_B) < MIN_BOX_SIZE_RATIO:
+        size_ratio = min(area_A, area_B) / max(area_A, area_B)
+        if size_ratio < MIN_BOX_SIZE_RATIO:
             continue
         # 3. At least one vehicle must have moved fast recently.
         #    Guards against two cars that stopped normally at a red light.
-        if (state.speed_peak.get(idA, 0.0) < SPEED_HIGH_THRESHOLD and
-                state.speed_peak.get(idB, 0.0) < SPEED_HIGH_THRESHOLD):
+        spA = state.speed_peak.get(idA, 0.0)
+        spB = state.speed_peak.get(idB, 0.0)
+        if spA < SPEED_HIGH_THRESHOLD and spB < SPEED_HIGH_THRESHOLD:
             continue
         # ─────────────────────────────────────────────────────────────────────
 
-        # Collision detection uses proximity (gap ratio) instead of IoU.
-        # Reason: side-impact / T-bone crashes leave vehicles ADJACENT, not
-        # overlapping — IoU can be 0.00 on a real crash (as seen in practice).
-        # PROXIMITY_THRESHOLD=0.15 means boxes within ~15% of vehicle diagonal.
-        # iou < IOU_MAX_THRESHOLD still guards against duplicate detections (IoU~0.9).
         gap_ratio = compute_box_gap_ratio(boxA, boxB)
+
+        # Track closest qualifying pair for debug
+        if gap_ratio < _dbg_best_gap:
+            _dbg_best_gap = gap_ratio
+            _dbg_best_pair = {
+                "ids": (idA, idB), "gap": gap_ratio, "iou": iou,
+                "spdA": speeds.get(idA, -1), "spdB": speeds.get(idB, -1),
+                "spkA": spA, "spkB": spB,
+                "confA": confs_map.get(idA, 0), "confB": confs_map.get(idB, 0),
+                "areaA": area_A, "areaB": area_B,
+            }
+
         if (
             not collision_detected
             and gap_ratio < PROXIMITY_THRESHOLD
@@ -427,6 +489,16 @@ def extract_features(state: CameraState, frame) -> FrameFeatures:
             )
             _collision_box_a = [float(v) for v in boxA]
             _collision_box_b = [float(v) for v in boxB]
+
+    # Periodic debug log (every 60 frames ≈ 2s)
+    state._dbg_counter = getattr(state, "_dbg_counter", 0) + 1
+    if state._dbg_counter % 60 == 0:
+        logger.info(
+            "[CAM-%d] DBG vehicles=%d near_miss=%d max_iou=%.3f streak=%d cd=%d best_pair=%s",
+            state.cam_id, len(boxes), near_misses, max_iou,
+            state.collision_streak, state.cooldown,
+            _dbg_best_pair,
+        )
 
     # Update streak (grows on collision, decays otherwise) and cooldown
     state.collision_streak = (
@@ -848,33 +920,41 @@ def _draw_display(feat: FrameFeatures, last_risk: dict, cam_state: CameraState) 
     )
     cv2.putText(base, top_text, (8, 24), small, 0.50, (220, 220, 220), 1, cv2.LINE_AA)
 
-    # ── Bottom banner: risk level ─────────────────────────────────────────
+    # ── Bottom banner: risk level (80px tall — fits 3 text rows) ─────────
     level  = last_risk.get("risk_level", "LOW")
     score  = last_risk.get("risk_score", 0.0)
-    reason = str(last_risk.get("reasoning", ""))[:72]
+    reason = str(last_risk.get("reasoning", ""))
     color  = _RISK_COLORS.get(level, (200, 200, 200))
 
+    BANNER_H = 80
+    banner_y = h - BANNER_H
+
     overlay2 = base.copy()
-    cv2.rectangle(overlay2, (0, h - 54), (w, h), (15, 15, 15), -1)
+    cv2.rectangle(overlay2, (0, banner_y), (w, h), (15, 15, 15), -1)
     cv2.addWeighted(overlay2, 0.65, base, 0.35, 0, base)
 
-    # Filled risk badge
+    # Filled risk badge (left side)
     badge_w = 130
-    cv2.rectangle(base, (0, h - 54), (badge_w, h), color, -1)
-    cv2.putText(base, level, (6, h - 54 + 26), font, 0.70, (10, 10, 10), 2, cv2.LINE_AA)
-    cv2.putText(base, f"score {score:.2f}", (6, h - 54 + 46), small, 0.42, (30, 30, 30), 1, cv2.LINE_AA)
+    cv2.rectangle(base, (0, banner_y), (badge_w, h), color, -1)
+    cv2.putText(base, level,              (6, banner_y + 28), font,  0.70, (10, 10, 10), 2, cv2.LINE_AA)
+    cv2.putText(base, f"score {score:.2f}", (6, banner_y + 52), small, 0.42, (30, 30, 30), 1, cv2.LINE_AA)
 
-    # Reasoning text
-    cv2.putText(base, reason, (badge_w + 8, h - 54 + 22), small, 0.42, (200, 200, 200), 1, cv2.LINE_AA)
+    # Reasoning split across two lines (~60 chars each)
+    text_x = badge_w + 8
+    max_chars = 62
+    line1 = reason[:max_chars]
+    line2 = reason[max_chars:max_chars * 2]
+    cv2.putText(base, line1, (text_x, banner_y + 22), small, 0.42, (200, 200, 200), 1, cv2.LINE_AA)
+    if line2:
+        cv2.putText(base, line2, (text_x, banner_y + 42), small, 0.42, (180, 180, 180), 1, cv2.LINE_AA)
 
-    # Collision alert text (show while live or while TTL > 0)
+    # Collision alert text (3rd row)
     if show_collision:
         if feat.collision_detected:
             alert = f"!! COLLISION  IoU={feat.collision_iou:.2f}  Conf={feat.collision_conf:.2f}"
         else:
-            # Lingering: show TTL countdown so user sees it fading out
             alert = f"!! COLLISION (confirmed)  [{cam_state.display_collision_ttl}f remaining]"
-        cv2.putText(base, alert, (badge_w + 8, h - 54 + 44), small, 0.46, (60, 60, 255), 1, cv2.LINE_AA)
+        cv2.putText(base, alert, (text_x, banner_y + 64), small, 0.46, (60, 60, 255), 1, cv2.LINE_AA)
 
     return base
 
@@ -944,7 +1024,7 @@ def init_cameras(sources: list) -> list[CameraState]:
     """
     states = []
     for i, url in enumerate(sources):
-        cap = cv2.VideoCapture(url)
+        cap = _open_capture(url)
         if cap.isOpened():
             logger.info("[CAM-%d] Opened: %s", i, url)
         else:
@@ -1137,6 +1217,9 @@ def _offline_features(state: CameraState) -> FrameFeatures:
         collision_iou=0.0,
         collision_conf=0.0,
         frame=state.last_good_frame,   # stale frame as placeholder
+        collision_box_a=None,
+        collision_box_b=None,
+        plotted_frame=None,
     )
 
 

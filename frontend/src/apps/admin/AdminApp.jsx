@@ -5,6 +5,7 @@ import AdminTopBar from './components/layout/AdminTopBar';
 import Dashboard from './pages/Dashboard';
 import LiveMonitoring from './pages/LiveMonitoring';
 import Incidents from './pages/Incidents';
+import Congestion from './pages/Congestion';
 import AIAgent from './pages/AIAgent';
 import Snapshots from './pages/Snapshots';
 import Analytics from './pages/Analytics';
@@ -22,6 +23,7 @@ export default function AdminApp() {
                         <Route path="dashboard" element={<Dashboard />} />
                         <Route path="live" element={<LiveMonitoring />} />
                         <Route path="incidents" element={<Incidents />} />
+                        <Route path="congestion" element={<Congestion />} />
                         <Route path="ai-agent" element={<AIAgent />} />
                         <Route path="snapshots" element={<Snapshots />} />
                         <Route path="analytics" element={<Analytics />} />

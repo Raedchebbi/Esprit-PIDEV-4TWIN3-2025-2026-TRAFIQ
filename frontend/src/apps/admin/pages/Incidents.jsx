@@ -1,13 +1,12 @@
-import React, { useEffect, useState } from 'react';
-import { useTrafik } from '../../../shared/context/TrafikContext';
+import React, { useEffect, useState, useCallback } from 'react';
 import IncidentCard from '../components/IncidentCard';
 import './Incidents.css';
 
 export default function Incidents() {
-    const { accidentsGPS } = useTrafik();
     const [aiIncidents, setAiIncidents] = useState([]);
+    const [selected, setSelected] = useState(new Set());
 
-    useEffect(() => {
+    const load = useCallback(() => {
         fetch('http://localhost:3000/accidents')
             .then(res => res.json())
             .then(data => {
@@ -16,20 +15,71 @@ export default function Incidents() {
                     type: 'Collision',
                     severity: 'high',
                     vehicles: `#${log.vehicle_a} → #${log.vehicle_b}`,
-                    score: log.iou ? (log.iou * 100).toFixed(0) + '%' : '—',
                     conf: log.confidence || 0,
-                    level: 'L3',
+                    level: log.risk_level || 'L3',
                     timestamp: log.timestamp,
                     snapshot: log.snapshot,
-                    active: true,
+                    camera_id: log.camera_id,
+                    active: !log.false_positive,
+                    false_positive: !!log.false_positive,
                 }));
                 setAiIncidents(mapped);
             })
             .catch(() => {});
     }, []);
 
-    const allIncidents = [...aiIncidents, ...accidentsGPS];
-    const activeCount = allIncidents.filter(a => a.active).length;
+    useEffect(() => {
+        load();
+        const iv = setInterval(load, 10000);
+        return () => clearInterval(iv);
+    }, [load]);
+
+    const toggleSelect = (id) => {
+        setSelected(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    };
+
+    const selectAll = (ids) => {
+        setSelected(prev => {
+            const next = new Set(prev);
+            const allSelected = ids.every(id => next.has(id));
+            if (allSelected) ids.forEach(id => next.delete(id));
+            else ids.forEach(id => next.add(id));
+            return next;
+        });
+    };
+
+    const handleFlag = async () => {
+        if (selected.size === 0) return;
+        const ids = [...selected];
+        await fetch('http://localhost:3000/accidents/flag', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ids }),
+        });
+        setSelected(new Set());
+        load();
+    };
+
+    const handleRemove = async () => {
+        if (selected.size === 0) return;
+        const ids = [...selected];
+        await fetch('http://localhost:3000/accidents/remove', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ids }),
+        });
+        setSelected(new Set());
+        load();
+    };
+
+    const allIncidents = aiIncidents;
+    const activeIncidents = allIncidents.filter(a => a.active);
+    const fpIncidents = allIncidents.filter(a => a.false_positive);
 
     return (
         <div className="adm-incidents-page">
@@ -37,36 +87,81 @@ export default function Incidents() {
                 <div className="adm-incidents-title">
                     <h2>Gestion des Incidents</h2>
                     <div className="adm-incidents-summary">
-                        <span className="adm-badge-red">{activeCount} actifs</span>
-                        <span className="adm-badge-gray">24 résolus aujourd'hui</span>
+                        <span className="adm-badge-red">{activeIncidents.length} actifs</span>
+                        {fpIncidents.length > 0 && (
+                            <span className="adm-badge-orange">{fpIncidents.length} faux positifs</span>
+                        )}
                     </div>
                 </div>
                 <div className="adm-incidents-filters">
-                    <input type="text" placeholder="Filtrer par ID ou Véhicule..." className="adm-input-search" />
-                    <select className="adm-select-filter">
-                        <option>Tous les niveaux</option>
-                        <option>Level L1</option>
-                        <option>Level L2</option>
-                        <option>Level L3</option>
-                    </select>
-                    <button className="adm-btn-primary">Exporter Rapport</button>
+                    {selected.size > 0 && (
+                        <div className="adm-selection-actions">
+                            <span className="adm-selection-count">{selected.size} sélectionné(s)</span>
+                            <button className="adm-btn-warning" onClick={handleFlag}>
+                                🚫 Faux positif
+                            </button>
+                            <button className="adm-btn-danger" onClick={handleRemove}>
+                                🗑 Supprimer
+                            </button>
+                            <button className="adm-btn-ghost" onClick={() => setSelected(new Set())}>
+                                ✕ Annuler
+                            </button>
+                        </div>
+                    )}
                 </div>
             </div>
 
             <div className="adm-incidents-list">
-                <h3>Incidents Actifs</h3>
+                <div className="adm-section-head">
+                    <h3>Incidents Actifs</h3>
+                    {activeIncidents.length > 0 && (
+                        <button
+                            className="adm-btn-ghost adm-btn-sm"
+                            onClick={() => selectAll(activeIncidents.map(a => a.id))}
+                        >
+                            {activeIncidents.every(a => selected.has(a.id)) ? 'Tout désélectionner' : 'Tout sélectionner'}
+                        </button>
+                    )}
+                </div>
                 <div className="adm-incidents-grid">
-                    {allIncidents.filter(a => a.active).map(acc => (
-                        <IncidentCard key={acc.id} incident={acc} />
+                    {activeIncidents.map(acc => (
+                        <IncidentCard
+                            key={acc.id}
+                            incident={acc}
+                            selectable
+                            selected={selected.has(acc.id)}
+                            onToggleSelect={() => toggleSelect(acc.id)}
+                        />
                     ))}
+                    {activeIncidents.length === 0 && (
+                        <p className="adm-empty-text">Aucun incident actif.</p>
+                    )}
                 </div>
 
-                <h3 className="adm-mt-32">Historique Récent (Resolus/Archivés)</h3>
-                <div className="adm-incidents-grid archived">
-                    {allIncidents.filter(a => !a.active).map(acc => (
-                        <IncidentCard key={acc.id} incident={acc} />
-                    ))}
-                </div>
+                {fpIncidents.length > 0 && (
+                    <>
+                        <div className="adm-section-head adm-mt-32">
+                            <h3>Faux Positifs</h3>
+                            <button
+                                className="adm-btn-ghost adm-btn-sm"
+                                onClick={() => selectAll(fpIncidents.map(a => a.id))}
+                            >
+                                {fpIncidents.every(a => selected.has(a.id)) ? 'Tout désélectionner' : 'Tout sélectionner'}
+                            </button>
+                        </div>
+                        <div className="adm-incidents-grid archived">
+                            {fpIncidents.map(acc => (
+                                <IncidentCard
+                                    key={acc.id}
+                                    incident={acc}
+                                    selectable
+                                    selected={selected.has(acc.id)}
+                                    onToggleSelect={() => toggleSelect(acc.id)}
+                                />
+                            ))}
+                        </div>
+                    </>
+                )}
             </div>
         </div>
     );

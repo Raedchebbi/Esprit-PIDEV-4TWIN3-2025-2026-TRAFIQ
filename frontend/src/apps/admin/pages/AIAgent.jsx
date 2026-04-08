@@ -1,9 +1,58 @@
-import React from 'react';
-import { useTrafik } from '../../../shared/context/TrafikContext';
+import React, { useEffect, useMemo, useState } from 'react';
 import './AIAgent.css';
 
 export default function AIAgent() {
-    const { stats, events } = useTrafik();
+    const [incidents, setIncidents] = useState([]);
+
+    useEffect(() => {
+        const load = () => {
+            fetch('http://localhost:3000/accidents')
+                .then(res => res.json())
+                .then(setIncidents)
+                .catch(() => {});
+        };
+        load();
+        const iv = setInterval(load, 10000);
+        return () => clearInterval(iv);
+    }, []);
+
+    const metrics = useMemo(() => {
+        const avgConf = incidents.length
+            ? Math.round(incidents.reduce((s, i) => s + (i.confidence || 0), 0) / incidents.length * 100)
+            : 0;
+        const avgRisk = incidents.length
+            ? Math.round(incidents.reduce((s, i) => s + (Number(i.risk_score) || 0), 0) / incidents.length * 100)
+            : 0;
+
+        const levelDist = incidents.reduce((acc, inc) => {
+            const lvl = String(inc.risk_level || 'LOW').toUpperCase();
+            acc[lvl] = (acc[lvl] || 0) + 1;
+            return acc;
+        }, {});
+
+        const total = incidents.length || 1;
+        const levelPercent = Object.fromEntries(
+            Object.entries(levelDist).map(([k, v]) => [k, Math.round((v / total) * 100)])
+        );
+
+        return { avgConf, avgRisk, levelPercent };
+    }, [incidents]);
+
+    const events = incidents.slice(0, 15).map((inc) => ({
+        time: inc.timestamp?.split(' ')[1] || '--:--:--',
+        type: 'CONFIRM',
+        level: inc.risk_level || 'LOW',
+        pair: `#${inc.vehicle_a}↔#${inc.vehicle_b}`,
+        score: Math.round((Number(inc.risk_score) || 0) * 100),
+        conf: inc.confidence || 0,
+    }));
+
+    const pipeline = [
+        { key: 'INGEST', ok: true, value: `${incidents.length} incidents reçus`, running: false },
+        { key: 'DETECTION', ok: true, value: 'YOLO + tracking actifs', running: true },
+        { key: 'RISK', ok: true, value: `Score moyen: ${metrics.avgRisk}/100`, running: false },
+        { key: 'CONFIDENCE', ok: true, value: `Confiance moyenne: ${metrics.avgConf}%`, running: false },
+    ];
 
     return (
         <div className="adm-ai-agent-page">
@@ -17,11 +66,11 @@ export default function AIAgent() {
                 <div className="adm-ai-card pipeline">
                     <div className="adm-ai-card-title">🤖 Pipeline de décision</div>
                     <div className="adm-pipeline-steps">
-                        {Object.entries(stats.pipeline).map(([key, data]) => (
-                            <div key={key} className={`adm-step-item ${data.running ? 'running' : ''}`}>
+                        {pipeline.map((data) => (
+                            <div key={data.key} className={`adm-step-item ${data.running ? 'running' : ''}`}>
                                 <div className="adm-step-icon">{data.ok ? '✅' : '🔄'}</div>
                                 <div className="adm-step-info">
-                                    <div className="adm-step-name">{key.toUpperCase()}</div>
+                                    <div className="adm-step-name">{data.key}</div>
                                     <div className="adm-step-val">{data.value}</div>
                                 </div>
                                 {data.running && <div className="adm-step-spinner" />}
@@ -54,29 +103,29 @@ export default function AIAgent() {
                     <div className="adm-ai-card-title">📊 Performance du moteur</div>
                     <div className="adm-ai-metrics">
                         <div className="adm-metric-row">
-                            <span>FPS traitement :</span>
-                            <strong>{stats.fps} fps</strong>
+                            <span>Sources actives :</span>
+                            <strong>5</strong>
                         </div>
                         <div className="adm-metric-row">
-                            <span>Précision session :</span>
-                            <strong>{stats.precision}%</strong>
+                            <span>Confiance moyenne :</span>
+                            <strong>{metrics.avgConf}%</strong>
                         </div>
                         <div className="adm-metric-row">
                             <span>Accidents confirmés :</span>
-                            <strong>{stats.accidents}</strong>
+                            <strong>{incidents.length}</strong>
                         </div>
                         <div className="adm-metric-row">
-                            <span>Faux positifs évités :</span>
-                            <strong>{stats.falsePositivesAvoided}</strong>
+                            <span>Risque moyen :</span>
+                            <strong>{metrics.avgRisk}/100</strong>
                         </div>
                         <div className="adm-metric-row">
-                            <span>Scénarios mémorisés :</span>
-                            <strong>{stats.scenarios}/300</strong>
+                            <span>Snapshots disponibles :</span>
+                            <strong>{incidents.filter(i => i.snapshot).length}</strong>
                         </div>
 
                         <div className="adm-ai-dist">
                             <div className="adm-dist-title">Répartition niveaux :</div>
-                            {Object.entries(stats.levelDist).map(([lvl, val]) => (
+                            {Object.entries(metrics.levelPercent).map(([lvl, val]) => (
                                 <div key={lvl} className="adm-dist-row">
                                     <span className="adm-dist-lvl">{lvl}</span>
                                     <div className="adm-dist-bar-bg">
@@ -88,10 +137,10 @@ export default function AIAgent() {
                         </div>
 
                         <div className="adm-ai-conf">
-                            <div className="adm-dist-title">Conf. best.pt moy. :</div>
+                            <div className="adm-dist-title">Confiance IA moyenne :</div>
                             <div className="adm-conf-big-bar">
-                                <div className="adm-conf-progress" style={{ width: `${stats.confidence}%` }} />
-                                <span className="adm-conf-text">{stats.confidence}%</span>
+                                <div className="adm-conf-progress" style={{ width: `${metrics.avgConf}%` }} />
+                                <span className="adm-conf-text">{metrics.avgConf}%</span>
                             </div>
                         </div>
                     </div>

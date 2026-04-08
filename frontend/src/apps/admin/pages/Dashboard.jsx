@@ -1,5 +1,4 @@
-import React from 'react';
-import { useTrafik } from '../../../shared/context/TrafikContext';
+import React, { useEffect, useMemo, useState } from 'react';
 import StatCard from '../components/StatCard';
 import AdminMap from '../components/AdminMap';
 import EventLogRow from '../components/EventLogRow';
@@ -7,9 +6,69 @@ import IncidentCard from '../components/IncidentCard';
 import './Dashboard.css';
 
 export default function Dashboard() {
-    const { stats, events, accidentsGPS } = useTrafik();
+    const [incidents, setIncidents] = useState([]);
 
-    const activeAccidentsCount = accidentsGPS.filter(a => a.active).length;
+    useEffect(() => {
+        const load = () => {
+            fetch('http://localhost:3000/accidents')
+                .then(res => res.json())
+                .then(setIncidents)
+                .catch(() => {});
+        };
+        load();
+        const iv = setInterval(load, 10000);
+        return () => clearInterval(iv);
+    }, []);
+
+    const stats = useMemo(() => {
+        const vehicleIds = new Set();
+        incidents.forEach((inc) => {
+            if (inc.vehicle_a !== undefined && inc.vehicle_a !== null && inc.vehicle_a !== -1) vehicleIds.add(inc.vehicle_a);
+            if (inc.vehicle_b !== undefined && inc.vehicle_b !== null && inc.vehicle_b !== -1) vehicleIds.add(inc.vehicle_b);
+        });
+
+        const avgConf = incidents.length
+            ? Math.round(incidents.reduce((s, i) => s + (i.confidence || 0), 0) / incidents.length * 100)
+            : 0;
+
+        const blockedSources = new Set(
+            incidents
+                .filter((i) => ['HIGH', 'CRITICAL'].includes(String(i.risk_level || '').toUpperCase()))
+                .map((i) => i.camera_id)
+                .filter(Boolean)
+        ).size;
+
+        return {
+            vehicles: vehicleIds.size,
+            activeAccidents: incidents.length,
+            blockedSources,
+            corrections: 0,
+            confidence: avgConf,
+        };
+    }, [incidents]);
+
+    const events = incidents.slice(0, 10).map((inc) => ({
+        id: inc.incident_id,
+        time: inc.timestamp?.split(' ')[1] || '--:--:--',
+        type: 'CONFIRM',
+        level: inc.risk_level || 'LOW',
+        pair: `#${inc.vehicle_a}↔#${inc.vehicle_b}`,
+        score: Math.round((Number(inc.risk_score) || 0) * 100),
+        conf: inc.confidence || 0,
+    }));
+
+    const incidentCards = incidents.slice(0, 10).map((inc) => ({
+        id: inc.incident_id,
+        type: 'Collision',
+        severity: ['HIGH', 'CRITICAL'].includes(String(inc.risk_level || '').toUpperCase()) ? 'high' : 'medium',
+        vehicles: `#${inc.vehicle_a} → #${inc.vehicle_b}`,
+        conf: inc.confidence || 0,
+        level: inc.risk_level || 'LOW',
+        timestamp: inc.timestamp,
+        snapshot: inc.snapshot,
+        camera_id: inc.camera_id,
+        active: true,
+    }));
 
     return (
         <div className="adm-dashboard">
@@ -18,24 +77,20 @@ export default function Dashboard() {
                 <StatCard
                     title="Véhicules détectés"
                     value={stats.vehicles}
-                    trend="+12 vs hier"
-                    trendPositive={true}
                 />
                 <StatCard
                     title="Accidents actifs"
-                    value={activeAccidentsCount}
-                    urgent={activeAccidentsCount > 0}
+                    value={stats.activeAccidents}
+                    urgent={stats.activeAccidents > 0}
                 />
                 <StatCard
-                    title="Routes bloquées"
-                    value={stats.blocked}
-                    urgent={stats.blocked > 0}
+                    title="Sources à risque élevé"
+                    value={stats.blockedSources}
+                    urgent={stats.blockedSources > 0}
                 />
                 <StatCard
                     title="Auto-corrections"
                     value={stats.corrections}
-                    trend="Précision IA"
-                    trendPositive={true}
                 />
                 <StatCard
                     title="Confiance IA"
@@ -64,7 +119,7 @@ export default function Dashboard() {
                         <span className="adm-badge-blue">{events.length} logs</span>
                     </div>
                     <div className="adm-dash-feed-content">
-                        {events.slice(0, 10).map((event, idx) => (
+                        {events.map((event, idx) => (
                             <EventLogRow key={event.id || idx} event={event} />
                         ))}
                     </div>
@@ -78,7 +133,7 @@ export default function Dashboard() {
                     <button className="adm-btn-text">Voir tous les incidents →</button>
                 </div>
                 <div className="adm-dash-incidents-grid">
-                    {accidentsGPS.filter(a => a.active).map(acc => (
+                    {incidentCards.map(acc => (
                         <IncidentCard key={acc.id} incident={acc} compact />
                     ))}
                 </div>

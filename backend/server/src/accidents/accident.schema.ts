@@ -14,4 +14,5 @@ export interface Accident {
   risk_score?:   number;
   risk_level?:   string;
   risk_reason?:  string;
+  false_positive?: boolean;
 }

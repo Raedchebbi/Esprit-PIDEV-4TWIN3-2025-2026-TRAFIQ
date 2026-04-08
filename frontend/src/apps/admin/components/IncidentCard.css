@@ -7,11 +7,51 @@
     flex-direction: column;
     gap: 12px;
     transition: all 0.2s;
+    position: relative;
 }
 
 .adm-incident-card:hover {
     border-color: var(--adm-accent);
     box-shadow: var(--adm-shadow-card);
+}
+
+.adm-incident-card.adm-card-selected {
+    border-color: #1565C0;
+    background: #E3F2FD;
+    box-shadow: 0 0 0 2px rgba(21, 101, 192, 0.2);
+}
+
+.adm-incident-card.adm-card-fp {
+    opacity: 0.55;
+    border-left-color: #90A4AE !important;
+}
+
+.adm-card-checkbox {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 2;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+}
+
+.adm-card-checkbox input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    accent-color: #1565C0;
+    cursor: pointer;
+}
+
+.adm-fp-tag {
+    background: #FF8A65;
+    color: #fff;
+    font-size: 0.55rem;
+    font-weight: 800;
+    padding: 1px 5px;
+    border-radius: 4px;
+    margin-right: 6px;
+    vertical-align: middle;
 }
 
 .adm-incident-card.s-high {

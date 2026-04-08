@@ -11,12 +11,12 @@ export class AccidentsService {
     '../ai-engine/incidents.jsonl',
   );
 
-  findAll(): Accident[] {
+  private readAll(): Accident[] {
     if (!fs.existsSync(this.incidentsFile)) {
       return [];
     }
     const raw = fs.readFileSync(this.incidentsFile, 'utf8');
-    const incidents: Accident[] = raw
+    return raw
       .split('\n')
       .filter((line) => line.trim())
       .map((line) => {
@@ -26,10 +26,36 @@ export class AccidentsService {
           return null;
         }
       })
-      .filter((item): item is Accident => item !== null)
-      .reverse()
-      .slice(0, 100);
+      .filter((item): item is Accident => item !== null);
+  }
 
-    return incidents;
+  private writeAll(incidents: Accident[]): void {
+    const data = incidents.map((inc) => JSON.stringify(inc)).join('\n') + '\n';
+    fs.writeFileSync(this.incidentsFile, data, 'utf8');
+  }
+
+  findAll(): Accident[] {
+    return this.readAll().reverse().slice(0, 100);
+  }
+
+  flagFalsePositives(ids: string[]): number {
+    const all = this.readAll();
+    let count = 0;
+    for (const inc of all) {
+      if (ids.includes(inc.incident_id)) {
+        inc.false_positive = true;
+        count++;
+      }
+    }
+    if (count > 0) this.writeAll(all);
+    return count;
+  }
+
+  removeIncidents(ids: string[]): number {
+    const all = this.readAll();
+    const filtered = all.filter((inc) => !ids.includes(inc.incident_id));
+    const removed = all.length - filtered.length;
+    if (removed > 0) this.writeAll(filtered);
+    return removed;
   }
 }

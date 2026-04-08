@@ -35,7 +35,7 @@ export default function PublicMap({ activeRoute, showProximityCircle }) {
     const { nearby } = useProximity(position, accidentsGPS, 30);
     const [legendVisible, setLegendVisible] = useState(true);
 
-    const activeAccidents = accidentsGPS.filter(a => a.active);
+    const activeAccidents = accidentsGPS.filter(a => a.active).slice(0, 2);
 
     return (
         <div className="pub-map-container">

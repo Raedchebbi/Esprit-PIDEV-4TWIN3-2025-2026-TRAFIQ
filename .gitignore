@@ -11,4 +11,9 @@ backend/ai-engine/runs/
 .vscode/
 .idea/                              
 node_modules/
-.env
+.envbackend/ai-engine/*.mp4 
+backend/ai-engine/incidents.jsonl 
+backend/ai-engine/snapshots/ 
+backend/ai-engine/*.png 
+backend/ai-engine/.env 
+frontend/public/videos/*.mp4 

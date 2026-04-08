@@ -1,23 +1,33 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../../shared/context/AuthContext';
-import { useTrafik } from '../../../../shared/context/TrafikContext';
 import './AdminSidebar.css';
 
 const navItems = [
-    { path: '/admin/dashboard', icon: '🏠', label: 'Vue d\'ensemble' },
-    { path: '/admin/live', icon: '📹', label: 'Live Monitoring' },
-    { path: '/admin/incidents', icon: '⚠️', label: 'Incidents', badge: true },
-    { path: '/admin/ai-agent', icon: '🤖', label: 'Agent IA' },
-    { path: '/admin/snapshots', icon: '📷', label: 'Snapshots' },
-    { path: '/admin/analytics', icon: '📊', label: 'Analytics' },
-    { path: '/admin/settings', icon: '⚙️', label: 'Paramètres' },
+    { path: '/admin/dashboard',   icon: '🏠', label: 'Vue d\'ensemble' },
+    { path: '/admin/live',        icon: '📹', label: 'Live Monitoring' },
+    { path: '/admin/incidents',   icon: '⚠️', label: 'Incidents', badge: true },
+    { path: '/admin/congestion',  icon: '🚦', label: 'Congestion' },
+    { path: '/admin/ai-agent',    icon: '🤖', label: 'Agent IA' },
+    { path: '/admin/analytics',   icon: '📊', label: 'Analytics' },
+    { path: '/admin/settings',    icon: '⚙️', label: 'Paramètres' },
 ];
 
 export default function AdminSidebar() {
     const { user, logout } = useAuth();
-    const { stats } = useTrafik();
     const navigate = useNavigate();
+    const [incidentCount, setIncidentCount] = useState(0);
+
+    useEffect(() => {
+        const fetchCount = () =>
+            fetch('http://localhost:3000/accidents')
+                .then(r => r.json())
+                .then(data => setIncidentCount(Array.isArray(data) ? data.length : 0))
+                .catch(() => {});
+        fetchCount();
+        const iv = setInterval(fetchCount, 10_000);
+        return () => clearInterval(iv);
+    }, []);
 
     const handleLogout = () => {
         logout();
@@ -42,8 +52,8 @@ export default function AdminSidebar() {
                     >
                         <span className="adm-sb-item-icon">{item.icon}</span>
                         <span className="adm-sb-item-label">{item.label}</span>
-                        {item.badge && stats.accidents > 0 && (
-                            <span className="adm-sb-item-badge">{stats.accidents}</span>
+                        {item.badge && incidentCount > 0 && (
+                            <span className="adm-sb-item-badge">{incidentCount}</span>
                         )}
                     </NavLink>
                 ))}

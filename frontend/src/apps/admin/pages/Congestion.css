@@ -1,0 +1,165 @@
+.adm-cong-page {
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.adm-cong-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.adm-cong-header h2 {
+    margin: 0 0 4px 0;
+    font-size: 1.4rem;
+    font-weight: 700;
+}
+
+.adm-cong-sub {
+    margin: 0;
+    font-size: 0.85rem;
+    opacity: 0.6;
+}
+
+/* Summary */
+.adm-cong-summary {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+}
+
+.adm-cong-sum-card {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px;
+    padding: 16px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.adm-cong-sum-card.urgent {
+    border-color: rgba(229,57,53,0.4);
+    background: rgba(229,57,53,0.06);
+}
+
+.adm-cong-sum-val {
+    font-size: 2rem;
+    font-weight: 800;
+    line-height: 1;
+}
+
+.adm-cong-sum-label {
+    font-size: 0.78rem;
+    opacity: 0.6;
+}
+
+/* Zones */
+.adm-cong-zones {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.adm-cong-zone-card {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 10px;
+    padding: 16px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.adm-cong-zone-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.adm-cong-zone-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.adm-cong-zone-flag { font-size: 1.4rem; }
+
+.adm-cong-zone-name {
+    font-weight: 700;
+    font-size: 0.95rem;
+}
+
+.adm-cong-zone-cam {
+    font-size: 0.75rem;
+    opacity: 0.5;
+    margin-top: 2px;
+}
+
+.adm-cong-risk-badge {
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 20px;
+    letter-spacing: 0.04em;
+}
+
+/* Bar */
+.adm-cong-bar-wrap {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.adm-cong-bar-track {
+    flex: 1;
+    height: 6px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.adm-cong-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.6s ease;
+}
+
+.adm-cong-bar-val {
+    font-size: 0.78rem;
+    font-weight: 700;
+    width: 50px;
+    text-align: right;
+    opacity: 0.8;
+}
+
+/* Stats row */
+.adm-cong-zone-stats {
+    display: flex;
+    gap: 20px;
+}
+
+.adm-cong-stat {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.adm-cong-stat-label {
+    font-size: 0.7rem;
+    opacity: 0.5;
+}
+
+.adm-cong-stat-val {
+    font-size: 0.95rem;
+    font-weight: 700;
+}
+
+.adm-cong-last {
+    font-size: 0.75rem;
+    opacity: 0.5;
+    border-top: 1px solid rgba(255,255,255,0.06);
+    padding-top: 8px;
+}
