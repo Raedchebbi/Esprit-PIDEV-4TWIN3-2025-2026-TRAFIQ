@@ -1,0 +1,140 @@
+.adm-incident-card {
+    background: #fff;
+    border: 1px solid #E0E4E8;
+    border-radius: 12px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    transition: all 0.2s;
+    position: relative;
+}
+
+.adm-incident-card:hover {
+    border-color: var(--adm-accent);
+    box-shadow: var(--adm-shadow-card);
+}
+
+.adm-incident-card.adm-card-selected {
+    border-color: #1565C0;
+    background: #E3F2FD;
+    box-shadow: 0 0 0 2px rgba(21, 101, 192, 0.2);
+}
+
+.adm-incident-card.adm-card-fp {
+    opacity: 0.55;
+    border-left-color: #90A4AE !important;
+}
+
+.adm-card-checkbox {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 2;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+}
+
+.adm-card-checkbox input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    accent-color: #1565C0;
+    cursor: pointer;
+}
+
+.adm-fp-tag {
+    background: #FF8A65;
+    color: #fff;
+    font-size: 0.55rem;
+    font-weight: 800;
+    padding: 1px 5px;
+    border-radius: 4px;
+    margin-right: 6px;
+    vertical-align: middle;
+}
+
+.adm-incident-card.s-high {
+    border-left: 4px solid var(--color-accident);
+}
+
+.adm-incident-card.s-medium {
+    border-left: 4px solid var(--color-warning);
+}
+
+.adm-incident-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.adm-incident-type {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 0.8rem;
+    color: var(--color-accident);
+}
+
+.adm-incident-level {
+    background: #ECEFF1;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: #455A64;
+}
+
+.adm-incident-main {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.adm-incident-vehicles {
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: var(--adm-text-primary);
+}
+
+.adm-incident-id {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: #90A4AE;
+}
+
+.adm-incident-meta {
+    display: flex;
+    gap: 8px;
+}
+
+.adm-meta-pill {
+    background: #F0F4F8;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: #546E7A;
+}
+
+.adm-incident-mini-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 4px;
+}
+
+.adm-icon-btn {
+    background: #F0F4F8;
+    border: none;
+    border-radius: 6px;
+    width: 28px;
+    height: 28px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8rem;
+}
+
+.adm-icon-btn:hover {
+    background: #E1E8EF;
+}
