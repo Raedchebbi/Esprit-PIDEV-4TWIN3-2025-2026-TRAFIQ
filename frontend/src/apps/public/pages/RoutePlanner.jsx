@@ -9,6 +9,7 @@ import './RoutePlanner.css';
 const startIcon = L.divIcon({ html: `<div style="background:#2E7D32;width:16px;height:16px;border-radius:50%;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.3)"></div>`, className: '', iconAnchor: [8, 8] });
 const endIcon = L.divIcon({ html: `<div style="background:#E53935;width:16px;height:16px;border-radius:50%;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.3)"></div>`, className: '', iconAnchor: [8, 8] });
 const accidentIcon = L.divIcon({ html: `<div style="background:#B71C1C;width:18px;height:18px;border-radius:50%;border:2px solid white;box-shadow:0 0 12px rgba(183,28,28,0.65)"></div>`, className: '', iconAnchor: [9, 9] });
+const ROUTING_API = 'https://router.project-osrm.org';
 
 const PLACE_DEFS = [
     { id: 'vienne-en-val', label: 'Vienne-en-Val', dashcam: 'Dashcam 1', fromCam: 'cam0', latOffset: 0.004, lngOffset: -0.010 },
@@ -93,16 +94,145 @@ function distancePointToSegmentKm(point, a, b) {
     return haversineKm(point, proj);
 }
 
+function polylineDistanceKm(points) {
+    if (!points || points.length < 2) return 0;
+
+    let total = 0;
+    for (let index = 0; index < points.length - 1; index += 1) {
+        const current = points[index];
+        const next = points[index + 1];
+        total += haversineKm(
+            { lat: current[0], lng: current[1] },
+            { lat: next[0], lng: next[1] },
+        );
+    }
+    return total;
+}
+
+function buildStreetPath(start, end, laneOffset = 0) {
+    const pivotLng = start.lng + (end.lng - start.lng) * 0.5;
+    const pivotLat = start.lat + (end.lat - start.lat) * 0.5;
+
+    return [
+        [start.lat, start.lng],
+        [start.lat, pivotLng + laneOffset],
+        [pivotLat + laneOffset, pivotLng + laneOffset],
+        [pivotLat + laneOffset, end.lng - laneOffset],
+        [end.lat, end.lng],
+    ];
+}
+
+function buildAccidentPath(start, via, end, laneOffset = 0) {
+    const approachLng = start.lng + (via.lng - start.lng) * 0.45 + laneOffset;
+    const approachLat = start.lat + (via.lat - start.lat) * 0.45 + laneOffset;
+    const exitLng = via.lng + (end.lng - via.lng) * 0.45 - laneOffset;
+    const exitLat = via.lat + (end.lat - via.lat) * 0.45 - laneOffset;
+
+    return [
+        [start.lat, start.lng],
+        [start.lat, approachLng],
+        [approachLat, approachLng],
+        [via.lat, via.lng],
+        [via.lat, exitLng],
+        [exitLat, exitLng],
+        [end.lat, end.lng],
+    ];
+}
+
+function toOsrmCoord(place) {
+    return `${place.lng},${place.lat}`;
+}
+
+function routeFromOsrm(osrmRoute, routeId, overrides = {}) {
+    const coords = (osrmRoute.geometry?.coordinates || []).map(([lng, lat]) => [lat, lng]);
+    return {
+        id: routeId,
+        label: overrides.label || 'RECOMMANDE',
+        labelColor: overrides.labelColor || '#2E7D32',
+        labelBg: overrides.labelBg || '#E8F5E9',
+        roads: overrides.roads || [],
+        time: Math.max(1, Math.round((osrmRoute.duration || 0) / 60)),
+        dist: Number(((osrmRoute.distance || 0) / 1000).toFixed(1)),
+        status: overrides.status || 'free',
+        incidents: overrides.incidents || 0,
+        isAccident: Boolean(overrides.isAccident),
+        passesAccident: Boolean(overrides.passesAccident),
+        extraMin: overrides.extraMin || 0,
+        coords,
+        color: overrides.color || ROUTE_COLORS[0],
+        weight: overrides.weight || 5,
+        opacity: overrides.opacity || 0.95,
+        dashArray: overrides.dashArray || null,
+    };
+}
+
+async function fetchOsrmRoutes(origin, destination, accidentWaypoint) {
+    const directUrl = `${ROUTING_API}/route/v1/driving/${toOsrmCoord(origin)};${toOsrmCoord(destination)}?alternatives=true&overview=full&geometries=geojson&steps=false`;
+    const directResponse = await fetch(directUrl);
+    if (!directResponse.ok) throw new Error(`OSRM direct route failed: ${directResponse.status}`);
+
+    const directData = await directResponse.json();
+    const routes = [];
+
+    if (Array.isArray(directData.routes) && directData.routes[0]) {
+        routes.push(routeFromOsrm(directData.routes[0], 1, {
+            label: 'RECOMMANDE',
+            labelColor: '#2E7D32',
+            labelBg: '#E8F5E9',
+            roads: [origin.label, destination.label],
+            status: 'free',
+            color: ROUTE_COLORS[0],
+            weight: 5,
+            opacity: 0.98,
+        }));
+    }
+
+    if (Array.isArray(directData.routes) && directData.routes[1]) {
+        routes.push(routeFromOsrm(directData.routes[1], 2, {
+            label: 'ALTERNATIF',
+            labelColor: '#F57C00',
+            labelBg: '#FFF3E0',
+            roads: [origin.label, destination.label],
+            status: 'slow',
+            color: ROUTE_COLORS[1],
+            weight: 4,
+            opacity: 0.7,
+            dashArray: '8,4',
+        }));
+    }
+
+    if (accidentWaypoint) {
+        const viaUrl = `${ROUTING_API}/route/v1/driving/${toOsrmCoord(origin)};${toOsrmCoord(accidentWaypoint)};${toOsrmCoord(destination)}?overview=full&geometries=geojson&steps=false`;
+        const viaResponse = await fetch(viaUrl);
+        if (!viaResponse.ok) throw new Error(`OSRM via-accident route failed: ${viaResponse.status}`);
+
+        const viaData = await viaResponse.json();
+        if (Array.isArray(viaData.routes) && viaData.routes[0]) {
+            routes.push(routeFromOsrm(viaData.routes[0], 3, {
+                label: 'AVEC ACCIDENT',
+                labelColor: '#B71C1C',
+                labelBg: '#FFEBEE',
+                roads: [origin.label, 'Point accident', destination.label],
+                status: 'blocked',
+                incidents: 1,
+                isAccident: true,
+                passesAccident: true,
+                extraMin: 0,
+                color: ROUTE_COLORS[2],
+                weight: 5,
+                opacity: 0.95,
+            }));
+        }
+    }
+
+    return routes;
+}
+
 function buildRouteVariants(startPlace, endPlace, accidentWaypoints, vehicleCounts) {
     if (!startPlace || !endPlace) return [];
 
     const start = { lat: startPlace.lat, lng: startPlace.lng };
     const end = { lat: endPlace.lat, lng: endPlace.lng };
-
-    const midLat = (start.lat + end.lat) / 2;
-    const midLng = (start.lng + end.lng) / 2;
-    const deltaLat = end.lat - start.lat;
-    const deltaLng = end.lng - start.lng;
 
     const nearestAccident = accidentWaypoints
         .map((acc) => ({
@@ -111,39 +241,28 @@ function buildRouteVariants(startPlace, endPlace, accidentWaypoints, vehicleCoun
         }))
         .sort((a, b) => a.d - b.d)[0] || null;
 
+    const baseRoute = buildStreetPath(start, end, 0);
+    const altRouteNorth = buildStreetPath(start, end, 0.006);
+    const altRouteSouth = buildStreetPath(start, end, -0.006);
+    const accidentRoute = nearestAccident
+        ? buildAccidentPath(start, nearestAccident, end, 0.004)
+        : buildStreetPath(start, end, 0.01);
+
     const variants = [
         {
             id: 1,
             roads: [startPlace.label, endPlace.label],
-            coords: [
-                [start.lat, start.lng],
-                [midLat, midLng],
-                [end.lat, end.lng],
-            ],
+            coords: baseRoute,
         },
         {
             id: 2,
             roads: ['Axe alternatif nord', endPlace.label],
-            coords: [
-                [start.lat, start.lng],
-                [midLat + deltaLng * 0.22, midLng - deltaLat * 0.22],
-                [end.lat, end.lng],
-            ],
+            coords: altRouteNorth,
         },
         {
             id: 3,
             roads: ['Passage zone accident', endPlace.label],
-            coords: nearestAccident
-                ? [
-                    [start.lat, start.lng],
-                    [nearestAccident.lat, nearestAccident.lng],
-                    [end.lat, end.lng],
-                ]
-                : [
-                    [start.lat, start.lng],
-                    [midLat - deltaLng * 0.2, midLng + deltaLat * 0.2],
-                    [end.lat, end.lng],
-                ],
+            coords: accidentRoute,
         },
     ];
 
@@ -151,7 +270,7 @@ function buildRouteVariants(startPlace, endPlace, accidentWaypoints, vehicleCoun
 
     return variants
         .map((variant, idx) => {
-            const distanceKm = haversineKm(start, end) * (1 + idx * 0.08);
+            const distanceKm = polylineDistanceKm(variant.coords);
             const accidentPenalty = idx === 2 && nearestAccident ? 12 : idx === 1 ? 4 : 1;
             const penalty = accidentPenalty + trafficPenalty + idx;
             const status = routeStatusFromPenalty(penalty);
@@ -203,11 +322,13 @@ export default function RoutePlanner() {
     const [vehicleCounts, setVehicleCounts] = useState({ total: 0, per_camera: [] });
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState('');
+    const [routeLoading, setRouteLoading] = useState(false);
 
     const [from, setFrom] = useState('');
     const [to, setTo] = useState('');
     const [searched, setSearched] = useState(false);
     const [selectedId, setSelectedId] = useState(1);
+    const [routeOptions, setRouteOptions] = useState([]);
 
     useEffect(() => {
         let isMounted = true;
@@ -274,23 +395,44 @@ export default function RoutePlanner() {
             }));
     }, [activeIncidents, cameras]);
 
-    const routes = useMemo(() => {
-        if (!from || !to) return [];
+    const selectedRoute = routeOptions.find((r) => r.id === selectedId) || routeOptions[0] || null;
+
+    const handleSearch = async () => {
+        if (!from || !to) return;
 
         const fromPlace = places.find((p) => p.id === from);
         const toPlace = places.find((p) => p.id === to);
-        if (!fromPlace || !toPlace) return [];
+        if (!fromPlace || !toPlace) return;
 
-        return buildRouteVariants(fromPlace, toPlace, accidentWaypoints, vehicleCounts);
-    }, [from, to, places, accidentWaypoints, vehicleCounts]);
-
-    const selectedRoute = routes.find((r) => r.id === selectedId) || routes[0] || null;
-
-    const handleSearch = () => {
-        if (!from || !to) return;
         setSearched(true);
-        const accidentRoute = routes.find((route) => route.passesAccident);
-        setSelectedId(accidentRoute ? accidentRoute.id : 1);
+        setRouteLoading(true);
+        setLoadError('');
+
+        const nearestAccident = accidentWaypoints
+            .map((acc) => ({
+                ...acc,
+                d: distancePointToSegmentKm(acc, { lat: fromPlace.lat, lng: fromPlace.lng }, { lat: toPlace.lat, lng: toPlace.lng }),
+            }))
+            .sort((a, b) => a.d - b.d)[0] || null;
+
+        try {
+            const osrmRoutes = await fetchOsrmRoutes(fromPlace, toPlace, nearestAccident);
+            if (osrmRoutes.length > 0) {
+                setRouteOptions(osrmRoutes);
+                setSelectedId(osrmRoutes.some((route) => route.passesAccident) ? 3 : 1);
+            } else {
+                const fallbackRoutes = buildRouteVariants(fromPlace, toPlace, nearestAccident ? [nearestAccident] : [], vehicleCounts);
+                setRouteOptions(fallbackRoutes);
+                setSelectedId(fallbackRoutes.some((route) => route.passesAccident) ? 3 : 1);
+            }
+        } catch {
+            const fallbackRoutes = buildRouteVariants(fromPlace, toPlace, nearestAccident ? [nearestAccident] : [], vehicleCounts);
+            setRouteOptions(fallbackRoutes);
+            setLoadError('Routing service unavailable, using fallback path.');
+            setSelectedId(fallbackRoutes.some((route) => route.passesAccident) ? 3 : 1);
+        } finally {
+            setRouteLoading(false);
+        }
     };
 
     const handleStart = route => {
@@ -309,7 +451,7 @@ export default function RoutePlanner() {
             <div className="planner-map">
                 <MapContainer center={mapCenter} zoom={13} style={{ height: '100%', width: '100%' }} zoomControl={false}>
                     <TileLayer url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png" />
-                    {searched && routes.map(route => (
+                    {searched && routeOptions.map(route => (
                         <Polyline
                             key={route.id}
                             positions={route.coords}
@@ -383,8 +525,8 @@ export default function RoutePlanner() {
 
                 {searched && (
                     <div className="planner-results">
-                        <div className="planner-results-title">{routes.length} itinéraires disponibles</div>
-                        {routes.map(route => (
+                        <div className="planner-results-title">{routeOptions.length} itinéraires disponibles</div>
+                        {routeOptions.map(route => (
                             <RouteCard
                                 key={route.id}
                                 route={route}
@@ -392,7 +534,10 @@ export default function RoutePlanner() {
                                 onStart={handleStart}
                             />
                         ))}
-                        {routes.length === 0 && (
+                        {routeLoading && (
+                            <div className="planner-empty-text">Calcul d’un itinéraire réel sur les routes...</div>
+                        )}
+                        {!routeLoading && routeOptions.length === 0 && (
                             <div className="planner-empty-text">Aucun itinéraire disponible pour ce trajet.</div>
                         )}
                     </div>
