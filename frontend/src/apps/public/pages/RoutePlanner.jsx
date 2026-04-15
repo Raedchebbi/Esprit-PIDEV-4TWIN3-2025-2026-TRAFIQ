@@ -329,6 +329,7 @@ export default function RoutePlanner() {
     const [searched, setSearched] = useState(false);
     const [selectedId, setSelectedId] = useState(1);
     const [routeOptions, setRouteOptions] = useState([]);
+    const [startedRouteId, setStartedRouteId] = useState(null);
 
     useEffect(() => {
         let isMounted = true;
@@ -396,6 +397,9 @@ export default function RoutePlanner() {
     }, [activeIncidents, cameras]);
 
     const selectedRoute = routeOptions.find((r) => r.id === selectedId) || routeOptions[0] || null;
+    const visibleRoutes = startedRouteId
+        ? routeOptions.filter((route) => route.id === startedRouteId)
+        : routeOptions;
 
     const handleSearch = async () => {
         if (!from || !to) return;
@@ -407,6 +411,7 @@ export default function RoutePlanner() {
         setSearched(true);
         setRouteLoading(true);
         setLoadError('');
+        setStartedRouteId(null);
 
         const nearestAccident = accidentWaypoints
             .map((acc) => ({
@@ -437,6 +442,7 @@ export default function RoutePlanner() {
 
     const handleStart = route => {
         setSelectedId(route.id);
+        setStartedRouteId(route.id);
     };
 
     const mapCenter = useMemo(() => {
@@ -451,7 +457,7 @@ export default function RoutePlanner() {
             <div className="planner-map">
                 <MapContainer center={mapCenter} zoom={13} style={{ height: '100%', width: '100%' }} zoomControl={false}>
                     <TileLayer url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png" />
-                    {searched && routeOptions.map(route => (
+                    {searched && visibleRoutes.map(route => (
                         <Polyline
                             key={route.id}
                             positions={route.coords}
@@ -519,6 +525,15 @@ export default function RoutePlanner() {
                     <button className="planner-search-btn" onClick={handleSearch}>
                         Calculer les itinéraires →
                     </button>
+                    {startedRouteId && (
+                        <button
+                            className="planner-locate-btn"
+                            style={{ marginTop: 10, width: '100%' }}
+                            onClick={() => setStartedRouteId(null)}
+                        >
+                            Afficher tous les itinéraires
+                        </button>
+                    )}
                     {loading && <div style={{ marginTop: 10, fontSize: '0.8rem', color: '#5A6A7A' }}>Chargement des données trafic...</div>}
                     {loadError && <div style={{ marginTop: 10, fontSize: '0.8rem', color: '#B71C1C' }}>{loadError}</div>}
                 </div>
