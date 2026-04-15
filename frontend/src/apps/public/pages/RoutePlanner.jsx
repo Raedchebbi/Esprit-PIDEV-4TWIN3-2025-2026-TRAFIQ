@@ -11,21 +11,33 @@ const endIcon = L.divIcon({ html: `<div style="background:#E53935;width:16px;hei
 const accidentIcon = L.divIcon({ html: `<div style="background:#B71C1C;width:18px;height:18px;border-radius:50%;border:2px solid white;box-shadow:0 0 12px rgba(183,28,28,0.65)"></div>`, className: '', iconAnchor: [9, 9] });
 
 const PLACE_DEFS = [
-    { id: 'vienne-en-val', label: 'Vienne-en-Val', fromCam: 'cam0', latOffset: 0.018, lngOffset: -0.024 },
-    { id: 'neuvy-en-sullias', label: 'Neuvy-en-Sullias', fromCam: 'cam0', latOffset: 0.032, lngOffset: 0.030 },
-    { id: 'tigy', label: 'Tigy', fromCam: 'cam0', latOffset: -0.022, lngOffset: 0.010 },
-    { id: 'sandillon', label: 'Sandillon', fromCam: 'cam1', latOffset: 0.016, lngOffset: -0.020 },
-    { id: 'jargeau', label: 'Jargeau', fromCam: 'cam1', latOffset: -0.018, lngOffset: 0.024 },
-    { id: 'ferolles', label: 'Férolles', fromCam: 'cam1', latOffset: 0.028, lngOffset: 0.038 },
+    { id: 'vienne-en-val', label: 'Vienne-en-Val', dashcam: 'Dashcam 1', fromCam: 'cam0', latOffset: 0.004, lngOffset: -0.010 },
+    { id: 'neuvy-en-sullias', label: 'Neuvy-en-Sullias', dashcam: 'Dashcam 1', fromCam: 'cam0', latOffset: 0.008, lngOffset: 0.006 },
+    { id: 'carrizo-de-la-ribera', label: 'Carrizo de la Ribera', dashcam: 'Dashcam 2', fromCam: 'cam1', latOffset: -0.004, lngOffset: 0.008 },
+    { id: 'villanueva-de-carrizo', label: 'Villanueva de Carrizo', dashcam: 'Dashcam 2', fromCam: 'cam1', latOffset: 0.006, lngOffset: -0.006 },
+    { id: 'solyanka', label: 'Solyanka', dashcam: 'Dashcam 3', fromCam: 'cam2', latOffset: 0.005, lngOffset: -0.008 },
+    { id: 'sadovyy', label: 'Sadovyy', dashcam: 'Dashcam 3', fromCam: 'cam2', latOffset: -0.005, lngOffset: 0.009 },
+    { id: 'tpycobo', label: 'Tpycobo', dashcam: 'Dashcam 4', fromCam: 'cam3', latOffset: 0.004, lngOffset: 0.010 },
+    { id: 'kulakovka', label: 'Kulakovka', dashcam: 'Dashcam 4', fromCam: 'cam3', latOffset: -0.004, lngOffset: -0.007 },
+    { id: 'boevaya-36', label: 'Астрахань, Боевая, 36', dashcam: 'Dashcam 5', fromCam: 'cam4', latOffset: 0.006, lngOffset: -0.005 },
+    { id: 'bogdana-hmelnitskogo-17', label: 'Астрахань, Богдана Хмельницкого, 17', dashcam: 'Dashcam 5', fromCam: 'cam4', latOffset: -0.006, lngOffset: 0.008 },
+    { id: 'boevaya-45', label: 'Астрахань, Боевая, 45', dashcam: 'Dashcam 6', fromCam: 'cam5', latOffset: 0.004, lngOffset: -0.007 },
+    { id: 'sadovyy-2', label: 'Sadovyy', dashcam: 'Dashcam 6', fromCam: 'cam5', latOffset: -0.005, lngOffset: 0.007 },
 ];
 
 const FALLBACK_PLACES = [
-    { id: 'vienne-en-val', label: 'Vienne-en-Val', lat: 47.8600, lng: 1.9920 },
-    { id: 'neuvy-en-sullias', label: 'Neuvy-en-Sullias', lat: 47.8060, lng: 1.9680 },
-    { id: 'tigy', label: 'Tigy', lat: 47.7980, lng: 1.8740 },
-    { id: 'sandillon', label: 'Sandillon', lat: 47.8440, lng: 1.9990 },
-    { id: 'jargeau', label: 'Jargeau', lat: 47.8600, lng: 2.1230 },
-    { id: 'ferolles', label: 'Férolles', lat: 47.8040, lng: 1.9360 },
+    { id: 'vienne-en-val', label: 'Vienne-en-Val', dashcam: 'Dashcam 1', lat: 47.8460, lng: 2.0970 },
+    { id: 'neuvy-en-sullias', label: 'Neuvy-en-Sullias', dashcam: 'Dashcam 1', lat: 47.8120, lng: 2.1150 },
+    { id: 'carrizo-de-la-ribera', label: 'Carrizo de la Ribera', dashcam: 'Dashcam 2', lat: 42.9600, lng: -5.8200 },
+    { id: 'villanueva-de-carrizo', label: 'Villanueva de Carrizo', dashcam: 'Dashcam 2', lat: 42.9700, lng: -5.8000 },
+    { id: 'solyanka', label: 'Solyanka', dashcam: 'Dashcam 3', lat: 46.3400, lng: 48.0400 },
+    { id: 'sadovyy', label: 'Sadovyy', dashcam: 'Dashcam 3', lat: 46.3500, lng: 48.0550 },
+    { id: 'tpycobo', label: 'Tpycobo', dashcam: 'Dashcam 4', lat: 46.3360, lng: 48.0200 },
+    { id: 'kulakovka', label: 'Kulakovka', dashcam: 'Dashcam 4', lat: 46.3440, lng: 48.0280 },
+    { id: 'boevaya-36', label: 'Астрахань, Боевая, 36', dashcam: 'Dashcam 5', lat: 46.3386, lng: 48.0209 },
+    { id: 'bogdana-hmelnitskogo-17', label: 'Астрахань, Богдана Хмельницкого, 17', dashcam: 'Dashcam 5', lat: 46.3364, lng: 48.0293 },
+    { id: 'boevaya-45', label: 'Астрахань, Боевая, 45', dashcam: 'Dashcam 6', lat: 46.3363, lng: 48.0226 },
+    { id: 'sadovyy-2', label: 'Sadovyy', dashcam: 'Dashcam 6', lat: 46.3614, lng: 48.0626 },
 ];
 
 const ROUTE_COLORS = ['#1A73E8', '#FF8F00', '#E53935'];
@@ -337,7 +349,7 @@ export default function RoutePlanner() {
                         <span className="planner-input-icon">📍</span>
                         <select value={from} onChange={e => setFrom(e.target.value)} className="planner-select">
                             <option value="">Point de départ...</option>
-                            {places.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
+                            {places.map(p => <option key={p.id} value={p.id}>{p.label} - {p.dashcam}</option>)}
                         </select>
                         <button
                             className="planner-locate-btn"
@@ -359,7 +371,7 @@ export default function RoutePlanner() {
                             <option value="">Destination...</option>
                             {places
                                 .filter(p => p.id !== from)
-                                .map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
+                                .map(p => <option key={p.id} value={p.id}>{p.label} - {p.dashcam}</option>)}
                         </select>
                     </div>
                     <button className="planner-search-btn" onClick={handleSearch}>
