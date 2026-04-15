@@ -10,15 +10,21 @@ TRAFIQ is a real-time, multi-camera traffic monitoring system that detects vehic
 
 ## Features
 
-- **Multi-camera YOLO detection** – 5 concurrent sources (local MP4 + live HLS streams)
+- **Dynamic camera registry** – single `cameras.json` config file drives AI engine, backend, and frontend — add new cameras without code changes
+- **Multi-camera YOLO detection** – concurrent sources (local MP4 + live HLS streams); iframe-only cameras auto-skipped by the AI engine
 - **Collision detection** – proximity-based + IoU overlap with multi-frame confirmation
+- **Low-confidence early dismissal** – collisions below `MIN_INCIDENT_CONF` (default 0.55) are dismissed before reaching the frontend
 - **Groq Vision risk assessment** – LLM analyses composite camera image + telemetry, returns structured risk score
+- **Refined risk scoring** – blends incident severity (70%) with live vehicle density (30%) for dynamic risk levels
+- **Real-time vehicle counts** – AI engine writes `vehicle_counts.json` every 15 frames → NestJS serves via REST → frontend polls every 2s
+- **Congestion-based map visualization** – circle radius colors and badges driven by live vehicle density (Fluide / Modéré / Dense / Saturé)
 - **Real-time WebSocket pipeline** – Python engine → NestJS gateway → React dashboard (Socket.io)
 - **Annotated snapshot capture** – collision bounding boxes + metadata banner saved as JPEG
-- **JSONL incident persistence** – append-only incident log with false-positive flagging and removal
-- **Interactive admin dashboard** – Leaflet map with dynamic risk-colored zone markers, media popups, auto-focus navigation
-- **Live monitoring** – embedded dashcam video and Windy webcam livestream iframes grouped by country
-- **False positive management** – multi-select UI to flag or permanently delete false positives
+- **JSONL incident persistence** – append-only incident log with false-positive flagging, unflagging, and removal
+- **False positive management** – flag, unflag (restore), or permanently delete false positives; flagged incidents excluded from dashboard, map, congestion, sidebar, and AI agent views
+- **Interactive admin dashboard** – Leaflet map with dynamic congestion-colored zone circles, media popups, auto-focus navigation
+- **Live monitoring** – embedded dashcam video and Windy webcam livestream iframes grouped by city
+- **Congestion analysis page** – real-time traffic density per zone with live vehicle counts, congestion levels, and active incident stats
 - **Public citizen app** – proximity alerts, route planner, live route status
 - **Algorithmic risk fallback** – instant heuristic scoring when Groq is unavailable or between API calls
 
@@ -32,7 +38,7 @@ TRAFIQ is a real-time, multi-camera traffic monitoring system that detects vehic
 | **Backend API** | NestJS 11 (TypeScript), Socket.io 4 |
 | **AI Engine** | Python 3.11, Ultralytics YOLOv8, OpenCV, Groq SDK, python-socketio |
 | **LLM** | Groq Cloud – `meta-llama/llama-4-scout-17b-16e-instruct` |
-| **Storage** | File-based JSONL (`incidents.jsonl`) + static snapshot images |
+| **Storage** | File-based JSONL (`incidents.jsonl`) + JSON (`vehicle_counts.json`, `cameras.json`) + static snapshot images |
 | **Live Streams** | Flussonic HLS (dvr5.astrakhan.ru), Windy public embed player |
 
 ---
@@ -53,9 +59,9 @@ TRAFIQ is a real-time, multi-camera traffic monitoring system that detects vehic
                              │ HTTP     │ WebSocket
                     ┌────────▼──────────▼─────────────────────────┐
                     │           NestJS Server (port 3000)         │
-                    │  REST: /accidents  /accidents/flag  /remove │
+                    │  REST: /accidents  /cameras  /vehicle-counts│
                     │  WS Gateway: risk_update, new_incident,     │
-                    │              camera_update                   │
+                    │              camera_update, vehicle_counts   │
                     │  Static: /accidents/snapshot/:filename       │
                     └────────┬────────────────────────────────────┘
                              │ Socket.io + File I/O
@@ -81,19 +87,23 @@ TRAFIQ/
 ├── backend/
 │   ├── ai-engine/
 │   │   ├── detect_video.py           # Multi-camera detection + risk engine
+│   │   ├── cameras.json              # Dynamic camera registry (single source of truth)
+│   │   ├── cameras.schema.json       # JSON Schema for cameras.json validation
 │   │   ├── prompts.py                # Groq LLM prompt templates
-│   │   ├── run_demo_videos.ps1       # Demo launcher (5 cameras)
+│   │   ├── run_demo_videos.ps1       # Demo launcher
 │   │   ├── requirements.txt          # Python dependencies
 │   │   ├── incidents.jsonl           # Append-only incident log (generated)
-│   │   ├── .env                      # GROQ_API_KEY + camera URLs
+│   │   ├── vehicle_counts.json       # Live vehicle counts per camera (generated)
+│   │   ├── .env                      # GROQ_API_KEY
 │   │   ├── models/
 │   │   │   └── vehicule-model.pt     # Custom YOLO vehicle detection weights
 │   │   ├── snapshots/                # Annotated collision JPEGs (generated)
 │   │   └── dataset/yolo/             # Training dataset (train/valid/test)
 │   └── server/                       # NestJS REST + WebSocket API
 │       └── src/
-│           ├── accidents/            # CRUD + flag/remove + snapshot serving
-│           ├── risk/                 # Socket.io gateway (Python → React)
+│           ├── accidents/            # CRUD + flag/unflag/remove + snapshot serving
+│           ├── cameras/              # Camera registry REST endpoint
+│           ├── risk/                 # Socket.io gateway + vehicle counts store
 │           ├── app.module.ts
 │           └── main.ts
 └── frontend/                         # React 19 + Vite
@@ -102,16 +112,16 @@ TRAFIQ/
         ├── apps/
         │   ├── admin/
         │   │   ├── components/
-        │   │   │   ├── AdminMap.jsx          # Leaflet map + 5 zone markers + media popups
+        │   │   │   ├── AdminMap.jsx          # Leaflet map + dynamic zone markers + congestion circles
         │   │   │   ├── IncidentCard.jsx      # Selectable card with snapshot/localise
         │   │   │   ├── StatCard.jsx
         │   │   │   └── layout/
         │   │   │       └── AdminSidebar.jsx  # Live incident badge from /accidents
         │   │   └── pages/
-        │   │       ├── Dashboard.jsx         # Stats + map + events (real-time /accidents)
-        │   │       ├── Incidents.jsx         # Multi-select + flag FP + delete
-        │   │       ├── LiveMonitoring.jsx    # Video/iframe feeds by country
-        │   │       ├── Congestion.jsx        # Per-camera risk analysis
+        │   │       ├── Dashboard.jsx         # Stats + map + real-time vehicle counts
+        │   │       ├── Incidents.jsx         # Multi-select + flag/unflag FP + delete
+        │   │       ├── LiveMonitoring.jsx    # Video/iframe feeds by city
+        │   │       ├── Congestion.jsx        # Real-time traffic density per zone
         │   │       ├── AIAgent.jsx           # Engine metrics from /accidents
         │   │       ├── Analytics.jsx         # Charts
         │   │       ├── Settings.jsx
@@ -169,6 +179,7 @@ An incident is confirmed when **all** conditions are met across **3 consecutive 
 | `MIN_BOX_AREA` | 3000 | Minimum bounding box area in px² |
 | `SPEED_HIGH_THRESHOLD` | 8.0 | Peak speed required to have "been moving" |
 | `SPEED_DROP_THRESHOLD` | 12.0 | Both must be below this (post-crash) |
+| `MIN_INCIDENT_CONF` | 0.55 | Minimum confidence to emit incident to frontend |
 | `CONFIRMATION_FRAMES` | 3 | Consecutive collision frames required |
 | `COOLDOWN_FRAMES` | 500 | Frames before same camera can fire again |
 
@@ -186,13 +197,18 @@ When a collision is confirmed, the engine:
 
 ## Camera Sources
 
-| Camera | Source | Location |
-|--------|--------|----------|
-| cam0 | `accident.mp4` (local) | France 🇫🇷 |
-| cam1 | `accident0.mp4` (local) | Spain 🇪🇸 |
-| cam2 | HLS `dvr5.astrakhan.ru/cam26hd` | Astrakhan, Russia 🇷🇺 |
-| cam3 | HLS `dvr5.astrakhan.ru/boev-36-hd-1` | Astrakhan, Russia 🇷🇺 |
-| cam4 | HLS `dvr5.astrakhan.ru/bogh-17-hd-1` | Astrakhan, Russia 🇷🇺 |
+Cameras are defined in `backend/ai-engine/cameras.json`. Add or remove entries without code changes.
+
+| Camera | Source | AI Processing | Location |
+|--------|--------|---------------|----------|
+| cam0 | `accident.mp4` (local) | ✅ YOLO | France 🇫🇷 |
+| cam1 | `accident0.mp4` (local) | ✅ YOLO | Spain 🇪🇸 |
+| cam2 | HLS `dvr5.astrakhan.ru/cam26hd` | ✅ YOLO | Astrakhan, Russia 🇷🇺 |
+| cam3 | HLS `dvr5.astrakhan.ru/boev-36-hd-1` | ✅ YOLO | Astrakhan, Russia 🇷🇺 |
+| cam4 | HLS `dvr5.astrakhan.ru/bogh-17-hd-1` | ✅ YOLO | Astrakhan, Russia 🇷🇺 |
+| cam5 | HLS`dvr.astrakhan.ru/kamz-molo-6-hd-2` | ✅ YOLO  | Astrakhan, Russia 🇷🇺 |
+
+> `stream_url` is optional. If absent, the engine falls back to `media_url`. Iframe-only cameras (no raw video stream) are automatically skipped by the AI engine but still appear on the frontend.
 
 ---<>
 
@@ -200,10 +216,14 @@ When a collision is confirmed, the engine:
 
 | Method | Route | Description |
 |--------|-------|-------------|
-| `GET` | `/accidents` | List all incidents (last 100, newest first) |
+| `GET` | `/accidents` | List all incidents including false positives (last 100) |
+| `GET` | `/accidents/active` | List active incidents only — excludes false positives |
 | `PATCH` | `/accidents/flag` | Flag incidents as false positives `{ ids: string[] }` |
+| `PATCH` | `/accidents/unflag` | Restore false positives back to active `{ ids: string[] }` |
 | `DELETE` | `/accidents/remove` | Permanently remove incidents `{ ids: string[] }` |
 | `GET` | `/accidents/snapshot/:filename` | Serve snapshot JPEG image |
+| `GET` | `/cameras` | List all enabled cameras from `cameras.json` |
+| `GET` | `/vehicle-counts` | Latest live vehicle counts per camera |
 
 ### WebSocket Events (Socket.io)
 
@@ -215,6 +235,8 @@ When a collision is confirmed, the engine:
 | NestJS → Frontend | `risk_update` | Re-broadcast of `risk_event` |
 | NestJS → Frontend | `new_incident` | Re-broadcast of `incident_confirmed` |
 | NestJS → Frontend | `camera_update` | Re-broadcast of `camera_status` |
+| Engine → NestJS | `vehicle_counts` | `{ total, per_camera: [{ cam_id, count }], timestamp }` |
+| NestJS → Frontend | `vehicle_counts` | Re-broadcast of `vehicle_counts` |
 
 ---
 
@@ -237,10 +259,10 @@ pip install -r requirements.txt
 Create a `.env` file:
 ```env
 GROQ_API_KEY=gsk_your_key_here
-RTSP_CAM_0=accident.mp4
-RTSP_CAM_1=accident0.mp4
 SHOW_DISPLAY=true
 ```
+
+Cameras are configured in `cameras.json` (no more env vars for camera URLs).
 
 Run with demo videos (all 5 cameras):
 ```powershell
@@ -294,10 +316,10 @@ Open `http://localhost:5173`.
 
 | Page | Description |
 |------|-------------|
-| **Vue d'ensemble** | Stats overview + interactive map with risk-colored zone markers |
-| **Live Monitoring** | Video/iframe feeds grouped by country with per-feed map navigation |
-| **Incidents** | Multi-select incident management: flag false positives, delete, view snapshots |
-| **Congestion** | Per-camera risk analysis with real-time stats |
+| **Vue d'ensemble** | Stats overview + interactive map with congestion-colored zones + live vehicle counts |
+| **Live Monitoring** | Video/iframe feeds grouped by city with per-feed map navigation |
+| **Incidents** | Multi-select incident management: flag/unflag false positives, delete, view snapshots |
+| **Congestion** | Real-time traffic density per zone with live vehicle counts and congestion levels |
 | **Agent IA** | AI engine metrics: avg confidence, risk distribution, pipeline status |
 | **Analytics** | Charts and historical data visualization |
 | **Settings** | System configuration |
