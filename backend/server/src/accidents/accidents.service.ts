@@ -34,8 +34,17 @@ export class AccidentsService {
     fs.writeFileSync(this.incidentsFile, data, 'utf8');
   }
 
+  /** Returns all incidents (including false positives) — for the Incidents page. */
   findAll(): Accident[] {
     return this.readAll().reverse().slice(0, 100);
+  }
+
+  /** Returns only non-false-positive incidents — for dashboard, map, congestion. */
+  findActive(): Accident[] {
+    return this.readAll()
+      .filter((inc) => !inc.false_positive)
+      .reverse()
+      .slice(0, 100);
   }
 
   flagFalsePositives(ids: string[]): number {
@@ -44,6 +53,19 @@ export class AccidentsService {
     for (const inc of all) {
       if (ids.includes(inc.incident_id)) {
         inc.false_positive = true;
+        count++;
+      }
+    }
+    if (count > 0) this.writeAll(all);
+    return count;
+  }
+
+  unflagFalsePositives(ids: string[]): number {
+    const all = this.readAll();
+    let count = 0;
+    for (const inc of all) {
+      if (ids.includes(inc.incident_id) && inc.false_positive) {
+        delete inc.false_positive;
         count++;
       }
     }

@@ -31,10 +31,13 @@ import {
   OnGatewayDisconnect,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
+import { VehicleCountsStore } from './vehicle-counts.store';
 
 @WebSocketGateway({ cors: { origin: '*' } })
 export class RiskGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer() server: Server;
+
+  constructor(private readonly vehicleCounts: VehicleCountsStore) {}
 
   handleConnection(client: Socket) {
     console.log(`[RiskGateway] Client connected:    ${client.id}`);
@@ -72,5 +75,16 @@ export class RiskGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @SubscribeMessage('camera_status')
   handleCameraStatus(client: Socket, data: unknown): void {
     this.server.emit('camera_update', data);
+  }
+
+  /**
+   * Python AI engine sends 'vehicle_counts' every N frames with
+   * per-camera live vehicle counts.
+   * We store the latest snapshot and re-broadcast to frontend clients.
+   */
+  @SubscribeMessage('vehicle_counts')
+  handleVehicleCounts(client: Socket, data: any): void {
+    this.vehicleCounts.update(data);
+    this.server.emit('vehicle_counts', data);
   }
 }

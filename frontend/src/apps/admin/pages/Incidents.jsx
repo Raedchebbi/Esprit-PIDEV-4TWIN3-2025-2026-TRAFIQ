@@ -1,14 +1,16 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import IncidentCard from '../components/IncidentCard';
+import { trafiqApi } from '../../../shared/services/trafiqApi';
 import './Incidents.css';
+
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
 export default function Incidents() {
     const [aiIncidents, setAiIncidents] = useState([]);
     const [selected, setSelected] = useState(new Set());
 
     const load = useCallback(() => {
-        fetch('http://localhost:3000/accidents')
-            .then(res => res.json())
+        trafiqApi.getAccidents()
             .then(data => {
                 const mapped = data.map((log) => ({
                     id: log.incident_id,
@@ -56,7 +58,19 @@ export default function Incidents() {
     const handleFlag = async () => {
         if (selected.size === 0) return;
         const ids = [...selected];
-        await fetch('http://localhost:3000/accidents/flag', {
+        await fetch(`${API_BASE}/accidents/flag`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ids }),
+        });
+        setSelected(new Set());
+        load();
+    };
+
+    const handleUnflag = async () => {
+        if (selected.size === 0) return;
+        const ids = [...selected];
+        await fetch(`${API_BASE}/accidents/unflag`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ ids }),
@@ -68,7 +82,7 @@ export default function Incidents() {
     const handleRemove = async () => {
         if (selected.size === 0) return;
         const ids = [...selected];
-        await fetch('http://localhost:3000/accidents/remove', {
+        await fetch(`${API_BASE}/accidents/remove`, {
             method: 'DELETE',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ ids }),
@@ -97,9 +111,18 @@ export default function Incidents() {
                     {selected.size > 0 && (
                         <div className="adm-selection-actions">
                             <span className="adm-selection-count">{selected.size} sélectionné(s)</span>
-                            <button className="adm-btn-warning" onClick={handleFlag}>
-                                🚫 Faux positif
-                            </button>
+                            {/* Show flag button if any selected item is active */}
+                            {[...selected].some(id => activeIncidents.find(a => a.id === id)) && (
+                                <button className="adm-btn-warning" onClick={handleFlag}>
+                                    🚫 Faux positif
+                                </button>
+                            )}
+                            {/* Show unflag button if any selected item is a false positive */}
+                            {[...selected].some(id => fpIncidents.find(a => a.id === id)) && (
+                                <button className="adm-btn-primary" onClick={handleUnflag}>
+                                    ✅ Rétablir
+                                </button>
+                            )}
                             <button className="adm-btn-danger" onClick={handleRemove}>
                                 🗑 Supprimer
                             </button>

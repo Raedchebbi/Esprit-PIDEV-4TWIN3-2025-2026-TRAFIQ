@@ -2,14 +2,8 @@ $ErrorActionPreference = 'Stop'
 
 Set-Location $PSScriptRoot
 
-# Local dashcam videos
-$env:RTSP_CAM_0 = Join-Path $PSScriptRoot 'accident.mp4'
-$env:RTSP_CAM_1 = Join-Path $PSScriptRoot 'accident0.mp4'
-
-# Astrakhan live HLS streams
-$env:RTSP_CAM_2 = 'https://dvr5.astrakhan.ru/cam26hd/index.m3u8'
-$env:RTSP_CAM_3 = 'https://dvr5.astrakhan.ru/boev-36-hd-1/index.m3u8'
-$env:RTSP_CAM_4 = 'https://dvr5.astrakhan.ru/bogh-17-hd-1/index.m3u8'
+# Camera sources are now defined in cameras.json — no RTSP_CAM_* env vars needed.
+# To override the config path: $env:CAMERAS_CONFIG = 'path/to/cameras.json'
 
 # Show live OpenCV preview windows
 $env:SHOW_DISPLAY = 'true'

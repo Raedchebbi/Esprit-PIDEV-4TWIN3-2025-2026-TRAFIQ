@@ -3,15 +3,16 @@ import StatCard from '../components/StatCard';
 import AdminMap from '../components/AdminMap';
 import EventLogRow from '../components/EventLogRow';
 import IncidentCard from '../components/IncidentCard';
+import { trafiqApi } from '../../../shared/services/trafiqApi';
 import './Dashboard.css';
 
 export default function Dashboard() {
     const [incidents, setIncidents] = useState([]);
+    const [vehicleCounts, setVehicleCounts] = useState({ total: 0, per_camera: [] });
 
     useEffect(() => {
         const load = () => {
-            fetch('http://localhost:3000/accidents')
-                .then(res => res.json())
+            trafiqApi.getActiveAccidents()
                 .then(setIncidents)
                 .catch(() => {});
         };
@@ -20,13 +21,19 @@ export default function Dashboard() {
         return () => clearInterval(iv);
     }, []);
 
-    const stats = useMemo(() => {
-        const vehicleIds = new Set();
-        incidents.forEach((inc) => {
-            if (inc.vehicle_a !== undefined && inc.vehicle_a !== null && inc.vehicle_a !== -1) vehicleIds.add(inc.vehicle_a);
-            if (inc.vehicle_b !== undefined && inc.vehicle_b !== null && inc.vehicle_b !== -1) vehicleIds.add(inc.vehicle_b);
-        });
+    // Poll live vehicle counts from the AI engine (fast refresh)
+    useEffect(() => {
+        const load = () => {
+            trafiqApi.getVehicleCounts()
+                .then(setVehicleCounts)
+                .catch(() => {});
+        };
+        load();
+        const iv = setInterval(load, 2000);
+        return () => clearInterval(iv);
+    }, []);
 
+    const stats = useMemo(() => {
         const avgConf = incidents.length
             ? Math.round(incidents.reduce((s, i) => s + (i.confidence || 0), 0) / incidents.length * 100)
             : 0;
@@ -39,13 +46,13 @@ export default function Dashboard() {
         ).size;
 
         return {
-            vehicles: vehicleIds.size,
+            vehicles: vehicleCounts.total,
             activeAccidents: incidents.length,
             blockedSources,
             corrections: 0,
             confidence: avgConf,
         };
-    }, [incidents]);
+    }, [incidents, vehicleCounts]);
 
     const events = incidents.slice(0, 10).map((inc) => ({
         id: inc.incident_id,

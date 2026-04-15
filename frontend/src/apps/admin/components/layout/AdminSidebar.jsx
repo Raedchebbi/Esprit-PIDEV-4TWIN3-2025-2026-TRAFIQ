@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../../shared/context/AuthContext';
+import { trafiqApi } from '../../../../shared/services/trafiqApi';
 import './AdminSidebar.css';
 
 const navItems = [
@@ -20,12 +21,11 @@ export default function AdminSidebar() {
 
     useEffect(() => {
         const fetchCount = () =>
-            fetch('http://localhost:3000/accidents')
-                .then(r => r.json())
+            trafiqApi.getActiveAccidents()
                 .then(data => setIncidentCount(Array.isArray(data) ? data.length : 0))
-                .catch(() => {});
+                .catch(console.error);
         fetchCount();
-        const iv = setInterval(fetchCount, 10_000);
+        const iv = setInterval(fetchCount, 5_000);
         return () => clearInterval(iv);
     }, []);
 

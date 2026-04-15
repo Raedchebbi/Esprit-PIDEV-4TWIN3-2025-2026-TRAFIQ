@@ -1,0 +1,65 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "TRAFIQ Camera Registry",
+  "description": "Defines monitored areas with geographic coordinates and livestream URLs.",
+  "type": "object",
+  "required": ["cameras"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "_comment": { "type": "string" },
+    "cameras": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "label", "area", "location", "media_url"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique camera identifier (e.g. 'cam5'). Used in incident logs and socket events."
+          },
+          "label": {
+            "type": "string",
+            "description": "Human-readable name shown in the UI."
+          },
+          "area": {
+            "type": "string",
+            "description": "Geographic area or intersection name for map grouping."
+          },
+          "location": {
+            "type": "object",
+            "required": ["latitude", "longitude"],
+            "properties": {
+              "latitude":  { "type": "number", "minimum": -90, "maximum": 90 },
+              "longitude": { "type": "number", "minimum": -180, "maximum": 180 }
+            },
+            "additionalProperties": false
+          },
+          "stream_url": {
+            "type": "string",
+            "description": "RTSP, HLS, or local file path for the AI-engine video source."
+          },
+          "media_url": {
+            "type": "string",
+            "description": "URL shown in the frontend preview (e.g. Windy iframe embed, or /videos/... for local files)."
+          },
+          "media_type": {
+            "type": "string",
+            "enum": ["video", "iframe"],
+            "description": "'video' for <video> tag sources, 'iframe' for embedded players."
+          },
+          "city": {
+            "type": "string",
+            "description": "Display city/region label for UI grouping (e.g. 'Astrakhan, Russia 🇷🇺')."
+          },
+          "enabled": {
+            "type": "boolean",
+            "default": true,
+            "description": "Set to false to skip this camera without removing the entry."
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": true
+}

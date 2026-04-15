@@ -13,6 +13,11 @@ export class AccidentsController {
     return this.accidentsService.findAll();
   }
 
+  @Get('active')
+  findActive() {
+    return this.accidentsService.findActive();
+  }
+
   @Patch('flag')
   flagFalsePositives(@Body() body: { ids: string[] }) {
     if (!Array.isArray(body?.ids) || body.ids.length === 0) {
@@ -20,6 +25,15 @@ export class AccidentsController {
     }
     const count = this.accidentsService.flagFalsePositives(body.ids);
     return { flagged: count };
+  }
+
+  @Patch('unflag')
+  unflagFalsePositives(@Body() body: { ids: string[] }) {
+    if (!Array.isArray(body?.ids) || body.ids.length === 0) {
+      throw new BadRequestException('ids must be a non-empty array');
+    }
+    const count = this.accidentsService.unflagFalsePositives(body.ids);
+    return { unflagged: count };
   }
 
   @Delete('remove')

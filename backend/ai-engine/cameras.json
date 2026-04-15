@@ -1,0 +1,93 @@
+{
+  "$schema": "./cameras.schema.json",
+  "_comment": "TRAFIQ Camera Registry",
+  "cameras": [
+    {
+      "id": "cam0",
+      "label": "Dashcam 1 — accident.mp4",
+      "area": "France",
+      "city": "France 🇫🇷",
+      "location": {
+        "latitude": 47.79524,
+        "longitude": 2.19883
+      },
+      "stream_url": "accident.mp4",
+      "media_url": "/videos/accident.mp4",
+      "media_type": "video",
+      "enabled": true
+    },
+    {
+      "id": "cam1",
+      "label": "Dashcam 2 — accident0.mp4",
+      "area": "Spain",
+      "city": "Spain 🇪🇸",
+      "location": {
+        "latitude": 42.583428,
+        "longitude": -5.818252
+      },
+      "stream_url": "accident0.mp4",
+      "media_url": "/videos/accident0.mp4",
+      "media_type": "video",
+      "enabled": true
+    },
+    {
+      "id": "cam2",
+      "label": "Астрахань, Боевая, 45",
+      "area": "Astrakhan",
+      "city": "Astrakhan, Russia 🇷🇺",
+      "location": {
+        "latitude": 46.336341,
+        "longitude": 48.022568
+      },
+      "stream_url": "https://dvr5.astrakhan.ru/cam26hd/index.m3u8",
+      "media_url": "https://webcams.windy.com/webcams/stream/1625695244",
+      "media_type": "iframe",
+      "enabled": true
+    },
+    {
+      "id": "cam3",
+      "label": "Астрахань, Боевая, 36",
+      "area": "Astrakhan",
+      "city": "Astrakhan, Russia 🇷🇺",
+      "location": {
+        "latitude": 46.338579,
+        "longitude": 48.020937
+      },
+      "stream_url": "https://dvr5.astrakhan.ru/boev-36-hd-1/index.m3u8",
+      "media_url": "https://webcams.windy.com/webcams/stream/1625695351",
+      "media_type": "iframe",
+      "enabled": true
+    },
+    {
+      "id": "cam4",
+      "label": "Астрахань, Богдана Хмельницкого, 17",
+      "area": "Astrakhan",
+      "city": "Astrakhan, Russia 🇷🇺",
+      "location": {
+        "latitude": 46.33642,
+        "longitude": 48.02928
+      },
+      "stream_url": "https://dvr5.astrakhan.ru/bogh-17-hd-1/index.m3u8",
+      "media_url": "https://webcams.windy.com/webcams/stream/1625695315",
+      "media_type": "iframe",
+      "enabled": true
+    },
+    {
+      "id": "cam5",
+      "label": "Astrakhan: Астрахань, Перевозная 1-я, 120",
+      "area": "Astrakhan",
+      "city": "Astrakhan, Russia 🇷🇺",
+      "location": {
+        "latitude": 46.361445,
+        "longitude": 48.062572
+      },
+      "stream_url": "https://dvr.astrakhan.ru/kamz-molo-6-hd-2/index.m3u8",
+      "media_url": "https://webcams.windy.com/webcams/stream/1626300001",
+      "media_type": "iframe",
+      "enabled": true
+    }
+    
+
+
+  ]
+}

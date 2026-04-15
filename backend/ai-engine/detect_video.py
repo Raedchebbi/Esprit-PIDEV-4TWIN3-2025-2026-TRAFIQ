@@ -21,7 +21,7 @@
 #
 # ENVIRONMENT VARIABLES (see .env.example for full list):
 #   GROQ_API_KEY            — required when ENABLE_RISK_ASSESSMENT=true
-#   RTSP_CAM_0/1/2          — RTSP stream URLs (falls back to accident0.mp4)
+#   CAMERAS_CONFIG          — path to cameras.json (default: ./cameras.json)
 #   ENABLE_RISK_ASSESSMENT  — true/false (default: true)
 #   RISK_FRAME_INTERVAL     — call Groq every N frames (default: 60)
 #   NESTJS_URL              — NestJS Socket.io URL (default: http://localhost:3000)
@@ -66,28 +66,76 @@ logger = logging.getLogger("trafiq.engine")
 # ── Config ─────────────────────────────────────────────────────────────────────
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# Camera sources: use RTSP_CAM_* env vars; fall back to test video if none set
-_raw_sources = [
-    os.environ.get("RTSP_CAM_0"),
-    os.environ.get("RTSP_CAM_1"),
-    os.environ.get("RTSP_CAM_2"),
-    os.environ.get("RTSP_CAM_3"),
-    os.environ.get("RTSP_CAM_4"),
-]
-CAMERA_SOURCES: list[str] = [s for s in _raw_sources if s]
-if not CAMERA_SOURCES:
-    _fallback_candidates = [
-        os.path.join(BASE_DIR, "accident.mp4"),
-        os.path.join(BASE_DIR, "accident0.mp4"),
+# ── Camera Registry ────────────────────────────────────────────────────────────
+# Loaded from cameras.json — add new areas, coordinates, and streams there.
+# Override path with CAMERAS_CONFIG env var if needed.
+CAMERAS_CONFIG_PATH = os.environ.get(
+    "CAMERAS_CONFIG", os.path.join(BASE_DIR, "cameras.json")
+)
+
+def _load_camera_config(path: str) -> list[dict]:
+    """
+    Load and validate cameras.json.  Returns a list of enabled camera dicts.
+
+    Each dict has: id, label, area, location{latitude, longitude}, media_url,
+    and optionally stream_url.  The AI engine uses stream_url for OpenCV;
+    if absent or empty it falls back to media_url.
+    Relative paths are resolved against BASE_DIR.
+    """
+    if not os.path.exists(path):
+        raise FileNotFoundError(
+            f"Camera config not found: {path}\n"
+            "Create cameras.json (see cameras.schema.json for the format)."
+        )
+    with open(path, "r", encoding="utf-8") as fh:
+        data = json.load(fh)
+    cameras = [
+        cam for cam in data.get("cameras", [])
+        if cam.get("enabled", True)
     ]
-    CAMERA_SOURCES = [src for src in _fallback_candidates if os.path.exists(src)]
-    if not CAMERA_SOURCES:
-        _fallback = os.path.join(BASE_DIR, "accident.mp4")
-        CAMERA_SOURCES = [_fallback]
-    logger.warning(
-        "No RTSP_CAM_* env vars found — using fallback sources: %s",
-        ", ".join(CAMERA_SOURCES),
-    )
+    if not cameras:
+        raise RuntimeError(
+            f"No enabled cameras found in {path}.\n"
+            "Add at least one camera entry with \"enabled\": true."
+        )
+    # Resolve stream source: prefer stream_url, fall back to media_url
+    # Skip iframe-only cameras that have no real video stream for OpenCV
+    processable = []
+    for cam in cameras:
+        url = cam.get("stream_url") or ""
+        media_type = cam.get("media_type", "video")
+
+        # If stream_url is missing/empty, try media_url only if it's a real video
+        if not url:
+            if media_type == "iframe":
+                logger.info(
+                    "[%s] Iframe-only camera (no stream_url) — skipping AI processing",
+                    cam["id"],
+                )
+                continue
+            url = cam.get("media_url") or ""
+
+        # If stream_url is the same as media_url and it's an iframe, OpenCV can't open it
+        if media_type == "iframe" and url == cam.get("media_url", ""):
+            logger.info(
+                "[%s] stream_url is an iframe embed, not a raw video — skipping AI processing",
+                cam["id"],
+            )
+            continue
+
+        if not url.startswith(("http://", "https://", "rtsp://", "rtsps://")):
+            resolved = os.path.join(BASE_DIR, url) if url else ""
+            if resolved and os.path.exists(resolved):
+                url = resolved
+        cam["stream_url"] = url
+        processable.append(cam)
+    return processable
+
+CAMERA_CONFIGS: list[dict] = _load_camera_config(CAMERAS_CONFIG_PATH)
+CAMERA_SOURCES: list[str]  = [c["stream_url"] for c in CAMERA_CONFIGS]
+logger.info(
+    "Loaded %d camera(s) from %s", len(CAMERA_CONFIGS), CAMERAS_CONFIG_PATH
+)
 
 MODEL_PATH             = os.path.join(BASE_DIR, "models", "vehicule-model.pt")
 SNAPSHOT_DIR           = os.path.join(BASE_DIR, "snapshots")
@@ -109,10 +157,14 @@ MIN_BOX_SIZE_RATIO     = float(os.environ.get("MIN_BOX_SIZE_RATIO", "0.25"))
 SPEED_HIGH_THRESHOLD   = float(os.environ.get("SPEED_HIGH_THRESHOLD", "8.0"))
 CONFIRMATION_FRAMES    = int(os.environ.get("CONFIRMATION_FRAMES", "3"))
 COOLDOWN_FRAMES        = int(os.environ.get("COOLDOWN_FRAMES", "500"))
+# Minimum confidence for a confirmed collision to be persisted / pushed to frontend.
+# Events below this threshold are silently dismissed (reduces false positives).
+MIN_INCIDENT_CONF      = float(os.environ.get("MIN_INCIDENT_CONF", "0.55"))
 RISK_FRAME_INTERVAL    = int(os.environ.get("RISK_FRAME_INTERVAL", "60"))
 ENABLE_RISK_ASSESSMENT = os.environ.get("ENABLE_RISK_ASSESSMENT", "true").lower() == "true"
 NESTJS_URL             = os.environ.get("NESTJS_URL", "http://localhost:3000")
 INCIDENTS_FILE         = os.path.join(BASE_DIR, "incidents.jsonl")
+VEHICLE_COUNTS_FILE    = os.path.join(BASE_DIR, "vehicle_counts.json")
 GROQ_API_KEY           = os.environ.get("GROQ_API_KEY")
 MAX_RECONNECT_ATTEMPTS = int(os.environ.get("MAX_RECONNECT_ATTEMPTS", "10"))
 SHOW_DISPLAY           = os.environ.get("SHOW_DISPLAY", "false").lower() == "true"
@@ -197,6 +249,9 @@ class CameraState:
     cam_id:           int
     url:              str
     cap:              cv2.VideoCapture
+    label:            str  = ""
+    area:             str  = ""
+    location:         dict = field(default_factory=lambda: {"latitude": 0.0, "longitude": 0.0})
     vehicle_memory:   dict = field(default_factory=dict)
     collision_streak: int  = 0
     cooldown:         int  = 0
@@ -534,6 +589,9 @@ def fuse_scenes(features_list: list, camera_states: list) -> dict:
     per_camera = [
         {
             "cam_id":               feat.cam_id,
+            "cam_label":            state.label,
+            "area":                 state.area,
+            "location":             state.location,
             "online":               state.online,
             "vehicle_count":        feat.vehicle_count,
             "near_miss_count":      feat.near_miss_count,
@@ -720,7 +778,9 @@ def assess_risk(scene: dict, frames: list, last_risk: dict) -> dict:
             parts = text.split("```")
             text = parts[1].lstrip("json").strip() if len(parts) > 1 else text
 
-        result = json.loads(text)
+        # strict=False tolerates control characters (\n, \t) inside JSON strings
+        # that LLMs sometimes emit in the "reasoning" field
+        result = json.loads(text, strict=False)
 
         # Sanitise output
         result["risk_score"] = max(0.0, min(1.0, float(result.get("risk_score", 0.0))))
@@ -816,6 +876,16 @@ def save_incident(
     if state.collision_streak < CONFIRMATION_FRAMES or state.cooldown > 0:
         return None
 
+    # Dismiss low-confidence collisions early — they never reach the frontend
+    if feat.collision_conf < MIN_INCIDENT_CONF:
+        logger.info(
+            "DISMISSED low-conf collision — CAM-%d | Conf=%.2f < %.2f threshold",
+            feat.cam_id, feat.collision_conf, MIN_INCIDENT_CONF,
+        )
+        state.collision_streak = 0
+        state.cooldown = COOLDOWN_FRAMES
+        return None
+
     now           = datetime.datetime.now()
     incident_id   = now.strftime("%Y%m%d_%H%M%S") + f"_cam{feat.cam_id}"
     snap_filename = f"snapshot_{incident_id}.jpg"
@@ -840,6 +910,9 @@ def save_incident(
         "iou":           round(float(feat.collision_iou), 2),
         "confidence":    float(feat.collision_conf),
         "camera_id":     f"cam{feat.cam_id}",
+        "camera_label":  state.label,
+        "area":          state.area,
+        "location":      state.location,
         # risk assessment at the moment of incident
         "risk_score":    last_risk.get("risk_score", 0.0),
         "risk_level":    last_risk.get("risk_level", "UNKNOWN"),
@@ -1024,12 +1097,21 @@ def init_cameras(sources: list) -> list[CameraState]:
     """
     states = []
     for i, url in enumerate(sources):
+        cfg = CAMERA_CONFIGS[i] if i < len(CAMERA_CONFIGS) else {}
         cap = _open_capture(url)
         if cap.isOpened():
-            logger.info("[CAM-%d] Opened: %s", i, url)
+            logger.info("[CAM-%d] Opened: %s  (%s)", i, url, cfg.get("area", "unknown"))
         else:
             logger.warning("[CAM-%d] Could not open: %s — will retry on first failed read", i, url)
-        states.append(CameraState(cam_id=i, url=url, cap=cap, online=cap.isOpened()))
+        states.append(CameraState(
+            cam_id=i,
+            url=url,
+            cap=cap,
+            label=cfg.get("label", f"cam{i}"),
+            area=cfg.get("area", ""),
+            location=cfg.get("location", {"latitude": 0.0, "longitude": 0.0}),
+            online=cap.isOpened(),
+        ))
 
     if not any(s.online for s in states):
         raise RuntimeError(
@@ -1060,17 +1142,19 @@ def main() -> None:
     frame_count         = 0
     last_risk           = {"risk_score": 0.0, "risk_level": "LOW", "source": "init"}
     _last_groq_ts       = 0.0    # wall-clock time of last Groq submission
-    # Min gap between Groq calls even during a collision — avoids rate limits.
-    # Groq is only called on collision; normal traffic uses instant heuristic.
+    # Min gap between Groq calls even during a collision.
+    # Groq is only called on collision.
     MIN_GROQ_GAP_S      = float(os.environ.get("MIN_GROQ_INTERVAL_S", "15.0"))
     _prev_any_collision = False
+    # How often (in frames) to push live vehicle counts to NestJS
+    _VEHICLE_COUNT_INTERVAL = int(os.environ.get("VEHICLE_COUNT_INTERVAL", "15"))
 
     while True:
         frame_count   += 1
         features_list  = []
 
-        # ── Step 1: Read + detect per camera (sequential) ──────────────────────
-        for state in camera_states:
+        # Step 1: Read + detect per camera 
+        for state in camera_states: 
             ret, frame = state.cap.read()
 
             if not ret:
@@ -1084,7 +1168,7 @@ def main() -> None:
                         features_list.append(_offline_features(state))
                         continue
                 else:
-                    # RTSP drop — attempt reconnect
+                    # RTSP drop means attempt reconnect
                     logger.warning("[CAM-%d] Stream read failed — reconnecting", state.cam_id)
                     _push_event("camera_status", {"cam_id": state.cam_id, "status": "reconnecting"})
                     if not reconnect_camera(state):
@@ -1098,7 +1182,7 @@ def main() -> None:
             state.last_good_frame = frame
             feat = extract_features(state, frame)
 
-            # ── Update lingering collision display TTL ──────────────────────────
+            # Update lingering collision display TTL 
             if feat.collision_detected:
                 # Each detected frame resets the latch to 30 frames
                 state.display_collision_ttl = 30
@@ -1109,13 +1193,16 @@ def main() -> None:
 
             features_list.append(feat)
 
-            # ── Step 2: Collision confirmation per camera ───────────────────────
+            # Step 2: Collision confirmation per camera 
             snap_file = save_incident(state, feat, last_risk)
             if snap_file:
                 # Keep overlay visible for the full cooldown so the user sees it
                 state.display_collision_ttl = COOLDOWN_FRAMES
                 _push_event("incident_confirmed", {
                     "cam_id":     feat.cam_id,
+                    "cam_label":  state.label,
+                    "area":       state.area,
+                    "location":   state.location,
                     "snapshot":   snap_file,
                     "vehicle_a":  feat.collision_idA,
                     "vehicle_b":  feat.collision_idB,
@@ -1129,7 +1216,25 @@ def main() -> None:
         if not features_list:
             continue
 
-        # ── Step 3: Risk assessment ────────────────────────────────────────────
+        # ── Push live vehicle counts every N frames ──────────────────────────
+        if frame_count % _VEHICLE_COUNT_INTERVAL == 0:
+            _vc_payload = {
+                "total": sum(f.vehicle_count for f in features_list),
+                "per_camera": [
+                    {"cam_id": f"cam{f.cam_id}", "count": f.vehicle_count}
+                    for f in features_list
+                ],
+                "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            }
+            # Write to file so NestJS can read it without socket.io
+            try:
+                with open(VEHICLE_COUNTS_FILE, "w", encoding="utf-8") as fh:
+                    json.dump(_vc_payload, fh)
+            except OSError:
+                pass
+            _push_event("vehicle_counts", _vc_payload)
+
+        # Step 3: Risk assessment 
         # • Collision active  → submit to Groq background thread (non-blocking).
         #   First collision frame always triggers; subsequent ones respect MIN_GROQ_GAP_S
         #   so we don't spam the API while the crash is still in frame.
@@ -1178,14 +1283,14 @@ def main() -> None:
             # while Groq is warming up or between calls.
             last_risk = algorithmic_risk_score(scene, reason="normal_traffic", collision=any_collision)
 
-        # ── Step 4: Live display window ────────────────────────────────────────
+        # Step 4: Live display window 
         if SHOW_DISPLAY:
             for feat, state in zip(features_list, camera_states):
                 disp = _draw_display(feat, last_risk, state)
                 if disp is not None:
                     cv2.imshow(f"TRAFIQ — CAM-{feat.cam_id}", disp)
             if cv2.waitKey(1) & 0xFF == 27:   # ESC to quit
-                logger.info("ESC pressed — stopping engine")
+                logger.info("ESC pressed stopps engine")
                 break
 
     # Cleanup

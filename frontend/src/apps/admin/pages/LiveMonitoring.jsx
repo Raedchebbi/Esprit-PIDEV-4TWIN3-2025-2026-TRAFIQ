@@ -1,84 +1,51 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { trafiqApi } from '../../../shared/services/trafiqApi';
 import './LiveMonitoring.css';
 
-// ─── Feed Configuration ───────────────────────────────────────────────────────
-const CITIES = [
-    {
-        id: 'france',
-        name: 'France Surveillance',
-        location: 'France 🇫🇷',
-        coords: { lat: 47.79524, lng: 2.19883 },
-        feeds: [
-            {
-                id: 'fr-1',
-                camId: 'cam0',
-                label: '47.79524, 2.19883',
-                src: '/videos/accident.mp4',
-                type: 'video',
-                placeholder: false,
-            },
-        ],
-    },
-    {
-        id: 'spain',
-        name: 'Spain Surveillance',
-        location: 'Spain 🇪🇸',
-        coords: { lat: 42.583428, lng: -5.818252 },
-        feeds: [
-            {
-                id: 'es-1',
-                camId: 'cam1',
-                label: '42.583428, -5.818252',
-                src: '/videos/accident0.mp4',
-                type: 'video',
-                placeholder: false,
-            },
-        ],
-    },
-    {
-        id: 'astrakhan',
-        name: 'Astrakhan Surveillance',
-        location: 'Astrakhan, Russia 🇷🇺',
-        coords: { lat: 46.3370, lng: 48.0240 },
-        feeds: [
-            {
-                id: 'ast-1',
-                camId: 'cam2',
-                label: 'Боевая, 45',
-                src: 'https://webcams.windy.com/webcams/public/embed/player/1625695244/live',
-                type: 'iframe',
-                placeholder: false,
-            },
-            {
-                id: 'ast-2',
-                camId: 'cam3',
-                label: 'Боевая, 36',
-                src: 'https://webcams.windy.com/webcams/public/embed/player/1625695351/live',
-                type: 'iframe',
-                placeholder: false,
-            },
-            {
-                id: 'ast-3',
-                camId: 'cam4',
-                label: 'Б. Хмельницкого, 17',
-                src: 'https://webcams.windy.com/webcams/public/embed/player/1625695315/live',
-                type: 'iframe',
-                placeholder: false,
-            },
-        ],
-    },
-];
+// ─── Transform flat camera list into city-grouped structure ───────────────────
+function groupCamerasByCityArea(cameras) {
+    const groups = {};
+    for (const cam of cameras) {
+        const key = cam.city || cam.area || 'Unknown';
+        if (!groups[key]) {
+            groups[key] = {
+                id: key.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+                name: `${cam.area} Surveillance`,
+                location: cam.city || cam.area,
+                coords: { lat: cam.location.latitude, lng: cam.location.longitude },
+                feeds: [],
+            };
+        }
+        groups[key].feeds.push({
+            id: cam.id,
+            camId: cam.id,
+            label: cam.label,
+            src: cam.media_url || '',
+            type: cam.media_type || 'video',
+            placeholder: false,
+        });
+    }
+    return Object.values(groups);
+}
 
 export default function LiveMonitoring() {
-    // focusedCity: 'ariana' | 'nyc' | null (null = show all 6)
+    const [cities, setCities] = useState([]);
     const [focusedCity, setFocusedCity] = useState(null);
-    const [focusedFeed, setFocusedFeed] = useState(null); // feed id for single zoom
+    const [focusedFeed, setFocusedFeed] = useState(null);
     const navigate = useNavigate();
 
+    useEffect(() => {
+        trafiqApi.getCameras()
+            .then(cams => setCities(groupCamerasByCityArea(cams)))
+            .catch(() => {});
+    }, []);
+
+    const totalFeeds = cities.reduce((n, c) => n + c.feeds.length, 0);
+
     const activeCities = focusedCity
-        ? CITIES.filter(c => c.id === focusedCity)
-        : CITIES;
+        ? cities.filter(c => c.id === focusedCity)
+        : cities;
 
     return (
         <div className="adm-live-page">
@@ -87,7 +54,7 @@ export default function LiveMonitoring() {
                 <div>
                     <h2>Live Monitoring</h2>
                     <p className="adm-live-sub">
-                        3 zones · 5 flux · Détection IA multi-angle active
+                        {cities.length} zones · {totalFeeds} flux · Détection IA multi-angle active
                     </p>
                 </div>
                 <div className="adm-live-controls">
@@ -113,7 +80,7 @@ export default function LiveMonitoring() {
                 >
                     Toutes les zones
                 </button>
-                {CITIES.map(city => (
+                {cities.map(city => (
                     <button
                         key={city.id}
                         className={`adm-live-tab ${focusedCity === city.id ? 'active' : ''}`}

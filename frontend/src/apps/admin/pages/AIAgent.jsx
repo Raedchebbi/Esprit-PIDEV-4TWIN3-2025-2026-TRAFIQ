@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { trafiqApi } from '../../../shared/services/trafiqApi';
 import './AIAgent.css';
 
 export default function AIAgent() {
@@ -6,8 +7,7 @@ export default function AIAgent() {
 
     useEffect(() => {
         const load = () => {
-            fetch('http://localhost:3000/accidents')
-                .then(res => res.json())
+            trafiqApi.getActiveAccidents()
                 .then(setIncidents)
                 .catch(() => {});
         };

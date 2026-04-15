@@ -2,31 +2,39 @@ import React, { useEffect, useState, useRef } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Circle, useMap } from 'react-leaflet';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import L from 'leaflet';
+import { trafiqApi } from '../../../shared/services/trafiqApi';
 
-// ─── Risk scoring ─────────────────────────────────────────────────────────────
+// ─── Risk scoring (shown in popup stats) ──────────────────────────────────────
 
 // How many minutes before an incident is considered "stale"
 const STALE_MINUTES = 10;
 
-function computeZoneRisk(incidents) {
-    if (!incidents || incidents.length === 0)
-        return { score: 0, color: '#43A047', label: 'Normal', pulse: false };
+function computeZoneRisk(incidents, vehicleCount = 0) {
+    // Base density score from live vehicle count (0-30 pts)
+    const densityScore = Math.min(vehicleCount / 15, 1) * 30;
+
+    if (!incidents || incidents.length === 0) {
+        // No incidents — risk comes only from congestion density
+        const score = Math.round(densityScore);
+        if (score >= 20) return { score, color: '#FDD835', label: 'Surveillance', pulse: false };
+        return { score, color: '#43A047', label: 'Normal', pulse: false };
+    }
 
     const now = Date.now();
-    // Check if any incident is recent (within STALE_MINUTES)
     const recentIncidents = incidents.filter(inc => {
-        if (!inc.timestamp) return true; // no timestamp → treat as recent
+        if (!inc.timestamp) return true;
         const ts = new Date(inc.timestamp).getTime();
         return (now - ts) < STALE_MINUTES * 60 * 1000;
     });
 
-    // Use risk_score from AI if available, otherwise compute from iou+confidence
     const best = recentIncidents.length > 0 ? recentIncidents[0] : incidents[0];
     const aiRisk = best.risk_score ?? null;
-    const score = aiRisk !== null
+    const incidentScore = aiRisk !== null
         ? Math.round(aiRisk * 100)
         : Math.round((best.iou || 0) * 50 + (best.confidence || 0) * 50);
 
+    // Blend: incident risk (70%) + density (30%)
+    const score = Math.min(100, Math.round(incidentScore * 0.7 + densityScore));
     const isRecent = recentIncidents.length > 0;
 
     if (score >= 70 || (best.risk_level === 'CRITICAL' && isRecent))
@@ -35,8 +43,15 @@ function computeZoneRisk(incidents) {
         return { score, color: '#FB8C00', label: 'Risque modéré',  pulse: false };
     if (isRecent)
         return { score, color: '#FDD835', label: 'Surveillance',    pulse: false };
-    // Stale incidents only
     return { score, color: '#43A047', label: 'Normal', pulse: false };
+}
+
+// ─── Congestion scoring (used for map circle colors) ──────────────────────────
+function computeCongestion(vehicleCount) {
+    if (vehicleCount >= 12) return { level: 'Saturé',  color: '#e53935' };
+    if (vehicleCount >= 7)  return { level: 'Dense',   color: '#FB8C00' };
+    if (vehicleCount >= 3)  return { level: 'Modéré',  color: '#FDD835' };
+    return { level: 'Fluide', color: '#43A047' };
 }
 
 // ─── Dynamic marker icon ──────────────────────────────────────────────────────
@@ -59,49 +74,17 @@ const cityIcon = (color, count, label) => L.divIcon({
     className: '', iconAnchor: [30, 14],
 });
 
-// ─── Zone definitions ─────────────────────────────────────────────────────────
-const ZONES = [
-    {
-        id: 'cam0',
-        name: 'Dashcam 1 — accident.mp4',
-        city: 'France 🇫🇷',
-        center: [47.79524, 2.19883],
-        mediaSrc: '/videos/accident.mp4',
-        mediaType: 'video',
-    },
-    {
-        id: 'cam1',
-        name: 'Dashcam 2 — accident0.mp4',
-        city: 'Spain 🇪🇸',
-        center: [42.583428, -5.818252],
-        mediaSrc: '/videos/accident0.mp4',
-        mediaType: 'video',
-    },
-    {
-        id: 'cam2',
-        name: 'Астрахань, Боевая, 45',
-        city: 'Astrakhan, Russia 🇷🇺',
-        center: [46.336341, 48.022568],
-        mediaSrc: 'https://webcams.windy.com/webcams/public/embed/player/1625695244/live',
-        mediaType: 'iframe',
-    },
-    {
-        id: 'cam3',
-        name: 'Aстрахань, Боевая, 36',
-        city: 'Astrakhan, Russia 🇷🇺',
-        center: [46.338579, 48.020937],
-        mediaSrc: 'https://webcams.windy.com/webcams/public/embed/player/1625695351/live',
-        mediaType: 'iframe',
-    },
-    {
-        id: 'cam4',
-        name: 'Астрахань, Богдана Хмельницкого, 17',
-        city: 'Astrakhan, Russia 🇷🇺',
-        center: [46.33642, 48.02928],
-        mediaSrc: 'https://webcams.windy.com/webcams/public/embed/player/1625695315/live',
-        mediaType: 'iframe',
-    },
-];
+// ─── Transform API camera data into zone objects for the map ──────────────────
+function camerasToZones(cameras) {
+    return cameras.map(cam => ({
+        id: cam.id,
+        name: cam.label,
+        city: cam.city || cam.area || '',
+        center: [cam.location.latitude, cam.location.longitude],
+        mediaSrc: cam.media_url || cam.stream_url || '',
+        mediaType: cam.media_type || 'video',
+    }));
+}
 
 // ─── Auto-focus helper: fly to zone and open its popup ───────────────────────
 function FocusOnZone({ targetCenter, markerRefs }) {
@@ -134,31 +117,49 @@ function FocusOnZone({ targetCenter, markerRefs }) {
 }
 
 export default function AdminMap() {
+    const [zones, setZones] = useState([]);
     const [aiIncidents, setAiIncidents] = useState([]);
+    const [vehicleCounts, setVehicleCounts] = useState({ total: 0, per_camera: [] });
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     const focusCam = searchParams.get('cam');
-    const focusZone = ZONES.find(z => z.id === focusCam);
+    const focusZone = zones.find(z => z.id === focusCam);
     const markerRefs = useRef({});
 
+    // Load cameras once from the API
     useEffect(() => {
-        fetch('http://localhost:3000/accidents')
-            .then(r => r.json())
-            .then(setAiIncidents)
+        trafiqApi.getCameras()
+            .then(cams => setZones(camerasToZones(cams)))
             .catch(() => {});
+    }, []);
 
-        const iv = setInterval(() => {
-            fetch('http://localhost:3000/accidents')
-                .then(r => r.json())
-                .then(setAiIncidents)
-                .catch(() => {});
-        }, 10_000);
+    // Poll incidents (active only — excludes false positives)
+    useEffect(() => {
+        const load = () =>
+            trafiqApi.getActiveAccidents().then(setAiIncidents).catch(console.error);
+        load();
+        const iv = setInterval(load, 3_000);
+        return () => clearInterval(iv);
+    }, []);
+
+    // Poll live vehicle counts (fast refresh)
+    useEffect(() => {
+        const load = () =>
+            trafiqApi.getVehicleCounts().then(setVehicleCounts).catch(() => {});
+        load();
+        const iv = setInterval(load, 2000);
         return () => clearInterval(iv);
     }, []);
 
     // Route incidents to zones by camera_id from AI engine
-    const zoneIncidents = ZONES.reduce((acc, zone) => {
+    const zoneIncidents = zones.reduce((acc, zone) => {
         acc[zone.id] = aiIncidents.filter(inc => inc.camera_id === zone.id);
+        return acc;
+    }, {});
+
+    // Map cam_id → live vehicle count
+    const camVehicleCount = (vehicleCounts.per_camera || []).reduce((acc, c) => {
+        acc[c.cam_id] = c.count;
         return acc;
     }, {});
 
@@ -183,17 +184,19 @@ export default function AdminMap() {
                 )}
 
                 {/* ── Zone summary markers ── */}
-                {ZONES.map(zone => {
-                    const incidents = zoneIncidents[zone.id] || [];
-                    const risk      = computeZoneRisk(incidents);
-                    const latest    = incidents[0];
+                {zones.map(zone => {
+                    const incidents   = zoneIncidents[zone.id] || [];
+                    const liveVehicles = camVehicleCount[zone.id] ?? 0;
+                    const congestion  = computeCongestion(liveVehicles);
+                    const risk        = computeZoneRisk(incidents, liveVehicles);
+                    const latest      = incidents[0];
 
                     return (
                         <React.Fragment key={zone.id}>
-                            {/* City summary badge */}
+                            {/* City summary badge — colored by congestion */}
                             <Marker
                                 position={zone.center}
-                                icon={cityIcon(risk.color, incidents.length, risk.label)}
+                                icon={cityIcon(congestion.color, incidents.length, congestion.level)}
                                 ref={el => { if (el) markerRefs.current[`${zone.center[0]},${zone.center[1]}`] = el; }}
                             >
                                 <Popup minWidth={320} maxWidth={380}>
@@ -225,8 +228,19 @@ export default function AdminMap() {
                                             />
                                         )}
 
+                                        {/* Congestion level */}
+                                        <div style={{ color: congestion.color, fontWeight: 700, marginBottom: 4 }}>
+                                            Congestion : {congestion.level}
+                                        </div>
+
+                                        {/* Live vehicle count */}
+                                        <div style={{ fontWeight: 700, marginBottom: 4 }}>
+                                            🚗 Véhicules détectés : {liveVehicles}
+                                        </div>
+
+                                        {/* Risk assessment stats */}
                                         <div style={{ color: risk.color, fontWeight: 700, marginBottom: 6 }}>
-                                            {risk.label} — Score {risk.score}/100
+                                            {risk.label} — Risk Score {risk.score}/100
                                         </div>
                                         <div style={{ marginBottom: 8 }}>
                                             {incidents.length} incident(s) détecté(s)
@@ -243,7 +257,7 @@ export default function AdminMap() {
                                         <button
                                             style={{
                                                 width: '100%', padding: '6px',
-                                                background: risk.color, color: '#fff',
+                                                background: congestion.color, color: '#fff',
                                                 border: 'none', borderRadius: 6,
                                                 cursor: 'pointer', fontWeight: 700,
                                             }}
@@ -255,13 +269,17 @@ export default function AdminMap() {
                                 </Popup>
                             </Marker>
 
-                            {/* Zone risk circle */}
+                            {/* Zone congestion circle */}
                             <Circle
+                                key={`${zone.id}-circle-${congestion.color}`}
                                 center={zone.center}
                                 radius={300}
-                                color={risk.color}
-                                fillOpacity={0.07}
-                                weight={1.5}
+                                pathOptions={{
+                                    color: congestion.color,
+                                    fillColor: congestion.color,
+                                    fillOpacity: 0.12,
+                                    weight: 2,
+                                }}
                             />
 
                         </React.Fragment>
