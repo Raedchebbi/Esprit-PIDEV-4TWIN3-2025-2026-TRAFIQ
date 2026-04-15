@@ -10,6 +10,7 @@ const startIcon = L.divIcon({ html: `<div style="background:#2E7D32;width:16px;h
 const endIcon = L.divIcon({ html: `<div style="background:#E53935;width:16px;height:16px;border-radius:50%;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.3)"></div>`, className: '', iconAnchor: [8, 8] });
 const accidentIcon = L.divIcon({ html: `<div style="background:#B71C1C;width:18px;height:18px;border-radius:50%;border:2px solid white;box-shadow:0 0 12px rgba(183,28,28,0.65)"></div>`, className: '', iconAnchor: [9, 9] });
 const ROUTING_API = 'https://router.project-osrm.org';
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
 const PLACE_DEFS = [
     { id: 'vienne-en-val', label: 'Vienne-en-Val', dashcam: 'Dashcam 1', fromCam: 'cam0', latOffset: 0.004, lngOffset: -0.010 },
@@ -376,6 +377,7 @@ export default function RoutePlanner() {
             return {
                 id: place.id,
                 label: place.label,
+                dashcam: place.dashcam,
                 lat: camera.location.latitude + place.latOffset,
                 lng: camera.location.longitude + place.lngOffset,
             };
@@ -387,13 +389,24 @@ export default function RoutePlanner() {
         const cameraById = new Map(cameras.map((cam) => [cam.id, cam]));
 
         return activeIncidents
-            .map((inc) => cameraById.get(inc.camera_id))
-            .filter(Boolean)
-            .map((cam) => ({
-                id: cam.id,
-                lat: cam.location.latitude,
-                lng: cam.location.longitude,
-            }));
+            .map((inc) => {
+                const cam = cameraById.get(inc.camera_id);
+                if (!cam) return null;
+
+                return {
+                    id: inc.incident_id || `${inc.camera_id}-${inc.timestamp}`,
+                    incidentId: inc.incident_id,
+                    cameraId: inc.camera_id,
+                    lat: cam.location.latitude,
+                    lng: cam.location.longitude,
+                    timestamp: inc.timestamp,
+                    snapshot: inc.snapshot,
+                    confidence: inc.confidence,
+                    riskLevel: inc.risk_level,
+                    riskReason: inc.risk_reason,
+                };
+            })
+            .filter(Boolean);
     }, [activeIncidents, cameras]);
 
     const selectedRoute = routeOptions.find((r) => r.id === selectedId) || routeOptions[0] || null;
@@ -479,9 +492,23 @@ export default function RoutePlanner() {
                             {accidentWaypoints.map((acc) => (
                                 <Marker key={`acc-${acc.id}`} position={[acc.lat, acc.lng]} icon={accidentIcon}>
                                     <Popup>
-                                        <div style={{ minWidth: 180 }}>
+                                        <div style={{ minWidth: 220 }}>
                                             <div style={{ fontWeight: 700, color: '#B71C1C', marginBottom: 4 }}>🚨 Point accident</div>
-                                            <div style={{ fontSize: '0.8rem', color: '#5A6A7A' }}>La route sélectionnée passe par ce point exact.</div>
+                                            {typeof acc.confidence === 'number' && (
+                                                <div style={{ fontSize: '0.8rem', color: '#25364A', marginBottom: 2 }}>
+                                                    Confiance: {(acc.confidence * 100).toFixed(0)}%
+                                                </div>
+                                            )}
+                                            {acc.riskReason && <div style={{ fontSize: '0.75rem', color: '#5A6A7A', marginBottom: 6 }}>{acc.riskReason}</div>}
+                                            {acc.snapshot ? (
+                                                <img
+                                                    src={`${API_BASE}/accidents/snapshot/${acc.snapshot}`}
+                                                    alt={`Snapshot accident ${acc.incidentId || ''}`}
+                                                    style={{ width: '100%', borderRadius: 8, marginTop: 4 }}
+                                                />
+                                            ) : (
+                                                <div style={{ fontSize: '0.75rem', color: '#5A6A7A', marginTop: 4 }}>Snapshot non disponible.</div>
+                                            )}
                                         </div>
                                     </Popup>
                                 </Marker>

@@ -1,1 +1,1 @@
-{"total": 2, "per_camera": [{"cam_id": "cam0", "count": 0}, {"cam_id": "cam1", "count": 2}, {"cam_id": "cam2", "count": 0}, {"cam_id": "cam3", "count": 0}, {"cam_id": "cam4", "count": 0}, {"cam_id": "cam5", "count": 0}], "timestamp": "2026-04-16 00:29:25"}
+{"total": 10, "per_camera": [{"cam_id": "cam0", "count": 7}, {"cam_id": "cam1", "count": 3}, {"cam_id": "cam2", "count": 0}, {"cam_id": "cam3", "count": 0}, {"cam_id": "cam4", "count": 0}, {"cam_id": "cam5", "count": 0}], "timestamp": "2026-04-16 00:42:02"}
