@@ -13,7 +13,6 @@ export default function RouteStatus() {
     const { routesData, stats } = useTrafik();
 
     const categories = [...new Set(routesData.map(r => r.category))];
-    const accidents = routesData.filter(r => r.status !== 'free').length;
     const blocked = routesData.filter(r => r.status === 'blocked').length;
     const slow = routesData.filter(r => r.status === 'slow').length;
 

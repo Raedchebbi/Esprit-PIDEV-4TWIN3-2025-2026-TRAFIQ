@@ -10,6 +10,7 @@ import AIAgent from './pages/AIAgent';
 import Snapshots from './pages/Snapshots';
 import Analytics from './pages/Analytics';
 import Settings from './pages/Settings';
+import AdminManagement from './pages/AdminManagement';
 import './AdminApp.css';
 
 export default function AdminApp() {
@@ -28,6 +29,7 @@ export default function AdminApp() {
                         <Route path="snapshots" element={<Snapshots />} />
                         <Route path="analytics" element={<Analytics />} />
                         <Route path="settings" element={<Settings />} />
+                        <Route path="admin-management" element={<AdminManagement />} />
                         <Route index element={<Navigate to="dashboard" replace />} />
                         <Route path="*" element={<Navigate to="dashboard" replace />} />
                     </Routes>

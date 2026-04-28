@@ -3,7 +3,6 @@ import IncidentCard from '../components/IncidentCard';
 import { trafiqApi } from '../../../shared/services/trafiqApi';
 import './Incidents.css';
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
 export default function Incidents() {
     const [aiIncidents, setAiIncidents] = useState([]);
@@ -58,11 +57,7 @@ export default function Incidents() {
     const handleFlag = async () => {
         if (selected.size === 0) return;
         const ids = [...selected];
-        await fetch(`${API_BASE}/accidents/flag`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ids }),
-        });
+        await trafiqApi.flagIncidents(ids);
         setSelected(new Set());
         load();
     };
@@ -70,11 +65,7 @@ export default function Incidents() {
     const handleUnflag = async () => {
         if (selected.size === 0) return;
         const ids = [...selected];
-        await fetch(`${API_BASE}/accidents/unflag`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ids }),
-        });
+        await trafiqApi.unflagIncidents(ids);
         setSelected(new Set());
         load();
     };
@@ -82,11 +73,7 @@ export default function Incidents() {
     const handleRemove = async () => {
         if (selected.size === 0) return;
         const ids = [...selected];
-        await fetch(`${API_BASE}/accidents/remove`, {
-            method: 'DELETE',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ids }),
-        });
+        await trafiqApi.removeIncidents(ids);
         setSelected(new Set());
         load();
     };

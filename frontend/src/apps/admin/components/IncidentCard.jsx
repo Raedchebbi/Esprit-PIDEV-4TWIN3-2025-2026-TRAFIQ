@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { API_BASE_URL } from '../../../shared/config/runtimeConfig';
 import './IncidentCard.css';
-
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
 export default function IncidentCard({ incident, compact, selectable, selected, onToggleSelect }) {
     const { id, type, severity, vehicles, conf, level, snapshot, timestamp, camera_id, false_positive } = incident;
@@ -47,7 +46,7 @@ export default function IncidentCard({ incident, compact, selectable, selected, 
             {showSnapshot && snapshot && (
                 <div className="adm-incident-snapshot">
                     <img
-                        src={`${API_BASE}/accidents/snapshot/${incident.snapshot}`}
+                        src={`${API_BASE_URL}/accidents/snapshot/${incident.snapshot}`}
                         alt="accident snapshot"
                         style={{ width: '100%', borderRadius: 8, marginTop: 8 }}
                     />

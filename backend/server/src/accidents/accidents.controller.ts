@@ -1,47 +1,104 @@
-import { Controller, Get, Patch, Delete, Param, Body, Res, BadRequestException } from '@nestjs/common';
+// ── TRAFIQ — Accidents Controller ─────────────────────────────────────────────
+// All endpoints protected by JWT. ADMIN users see/modify only incidents for
+// cameras in their assigned country. SUPER_ADMIN has global access.
+
+import {
+  Controller,
+  Get,
+  Patch,
+  Delete,
+  Param,
+  Body,
+  Res,
+  Request,
+  BadRequestException,
+  NotFoundException,
+  UseGuards,
+} from '@nestjs/common';
 import type { Response } from 'express';
 import { AccidentsService } from './accidents.service';
+import { CamerasService } from '../cameras/cameras.service';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RolesGuard } from '../auth/roles.guard';
+import { Roles } from '../auth/roles.decorator';
+import { RequestUser } from '../auth/user.interface';
 import * as path from 'path';
 import * as fs from 'fs';
 
 @Controller('accidents')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('ADMIN', 'SUPER_ADMIN')
 export class AccidentsController {
-  constructor(private readonly accidentsService: AccidentsService) {}
+  constructor(
+    private readonly accidentsService: AccidentsService,
+    private readonly camerasService: CamerasService,
+  ) {}
+
+  /** Helper: get allowed camera IDs for the requesting user. */
+  private getAllowedCameraIds(user: RequestUser): string[] | null {
+    if (user.role === 'SUPER_ADMIN') return null; // null = no filter
+    return this.camerasService.getCameraIdsForCountry(user.country!);
+  }
 
   @Get()
-  findAll() {
-    return this.accidentsService.findAll();
+  findAll(@Request() req: { user: RequestUser }) {
+    const cameraIds = this.getAllowedCameraIds(req.user);
+    if (cameraIds === null) return this.accidentsService.findAll();
+    return this.accidentsService.findAllByCountry(cameraIds);
   }
 
   @Get('active')
-  findActive() {
-    return this.accidentsService.findActive();
+  findActive(@Request() req: { user: RequestUser }) {
+    const cameraIds = this.getAllowedCameraIds(req.user);
+    if (cameraIds === null) return this.accidentsService.findActive();
+    return this.accidentsService.findActiveByCountry(cameraIds);
   }
 
   @Patch('flag')
-  flagFalsePositives(@Body() body: { ids: string[] }) {
+  flagFalsePositives(
+    @Body() body: { ids: string[] },
+    @Request() req: { user: RequestUser },
+  ) {
     if (!Array.isArray(body?.ids) || body.ids.length === 0) {
       throw new BadRequestException('ids must be a non-empty array');
     }
-    const count = this.accidentsService.flagFalsePositives(body.ids);
+    const cameraIds = this.getAllowedCameraIds(req.user);
+    const count =
+      cameraIds === null
+        ? this.accidentsService.flagFalsePositives(body.ids)
+        : this.accidentsService.flagFalsePositivesScoped(body.ids, cameraIds);
     return { flagged: count };
   }
 
   @Patch('unflag')
-  unflagFalsePositives(@Body() body: { ids: string[] }) {
+  unflagFalsePositives(
+    @Body() body: { ids: string[] },
+    @Request() req: { user: RequestUser },
+  ) {
     if (!Array.isArray(body?.ids) || body.ids.length === 0) {
       throw new BadRequestException('ids must be a non-empty array');
     }
-    const count = this.accidentsService.unflagFalsePositives(body.ids);
+    const cameraIds = this.getAllowedCameraIds(req.user);
+    const count =
+      cameraIds === null
+        ? this.accidentsService.unflagFalsePositives(body.ids)
+        : this.accidentsService.unflagFalsePositivesScoped(body.ids, cameraIds);
     return { unflagged: count };
   }
 
   @Delete('remove')
-  removeIncidents(@Body() body: { ids: string[] }) {
+  removeIncidents(
+    @Body() body: { ids: string[] },
+    @Request() req: { user: RequestUser },
+  ) {
     if (!Array.isArray(body?.ids) || body.ids.length === 0) {
       throw new BadRequestException('ids must be a non-empty array');
     }
-    const count = this.accidentsService.removeIncidents(body.ids);
+    const cameraIds = this.getAllowedCameraIds(req.user);
+    const count =
+      cameraIds === null
+        ? this.accidentsService.removeIncidents(body.ids)
+        : this.accidentsService.removeIncidentsScoped(body.ids, cameraIds);
     return { removed: count };
   }
 
@@ -62,7 +119,7 @@ export class AccidentsController {
     }
 
     if (!fs.existsSync(filePath)) {
-      return res.status(404).json({ message: 'Snapshot not found' });
+      throw new NotFoundException('Snapshot not found');
     }
     return res.sendFile(filePath);
   }

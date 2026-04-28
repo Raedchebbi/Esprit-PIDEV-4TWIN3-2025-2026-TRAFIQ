@@ -6,7 +6,7 @@ import './Analytics.jsx.css';
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042'];
 
 export default function Analytics() {
-    const { events, stats } = useTrafik();
+    const { stats } = useTrafik();
 
     // Mock data for charts
     const timelineData = [

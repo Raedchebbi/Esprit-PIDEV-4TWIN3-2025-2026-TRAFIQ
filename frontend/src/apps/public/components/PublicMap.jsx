@@ -1,15 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, Circle, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { useTrafik } from '../../../shared/context/TrafikContext';
-import { useGeolocation } from '../../../shared/hooks/useGeolocation';
 import { useProximity } from '../../../shared/hooks/useProximity';
-
-// Custom icons
-const createIcon = (color, size = 14) => L.divIcon({
-    html: `<div style="width:${size}px;height:${size}px;border-radius:50%;background:${color};border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.3)"></div>`,
-    className: '', iconAnchor: [size / 2, size / 2]
-});
 
 const userIcon = L.divIcon({
     html: `<div class="user-marker"><div class="user-marker-dot"></div><div class="user-marker-ring"></div></div>`,
@@ -25,13 +18,16 @@ const polylineColors = { free: '#2E7D32', blocked: '#B71C1C', slow: '#FF8F00' };
 
 function RecenterMap({ position }) {
     const map = useMap();
-    useEffect(() => { if (position) map.setView([position.lat, position.lng], 15); }, []);
+    useEffect(() => {
+        if (position) {
+            map.setView([position.lat, position.lng], 15);
+        }
+    }, [map, position]);
     return null;
 }
 
-export default function PublicMap({ activeRoute, showProximityCircle }) {
+export default function PublicMap({ activeRoute, position, showProximityCircle }) {
     const { accidentsGPS, polylines } = useTrafik();
-    const { position } = useGeolocation();
     const { nearby } = useProximity(position, accidentsGPS, 30);
     const [legendVisible, setLegendVisible] = useState(true);
 
@@ -40,6 +36,7 @@ export default function PublicMap({ activeRoute, showProximityCircle }) {
     return (
         <div className="pub-map-container">
             <style>{`
+        .pub-map-container { height: 100%; width: 100%; position: relative; }
         .user-marker { position:relative; width:28px; height:28px; }
         .user-marker-dot { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:12px; height:12px; background:#1A73E8; border-radius:50%; border:2px solid white; z-index:2; }
         .user-marker-ring { position:absolute; top:0; left:0; width:28px; height:28px; border:2px solid rgba(26,115,232,0.4); border-radius:50%; animation:ripple 2s ease-out infinite; }

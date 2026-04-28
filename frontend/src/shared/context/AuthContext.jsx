@@ -1,4 +1,6 @@
+// ── TRAFIQ — AuthContext (JWT-based hierarchical auth) ────────────────────────
 import React, { createContext, useContext, useState } from 'react';
+import { API_BASE_URL } from '../config/runtimeConfig';
 
 const AuthContext = createContext(null);
 
@@ -8,23 +10,58 @@ export function AuthProvider({ children }) {
         return stored ? JSON.parse(stored) : null;
     });
 
-    const login = (email, password) => {
-        if (email === 'admin@trafiq.ai' && password === 'trafiq2025') {
-            const userData = { email, name: 'Admin TRAFIQ', role: 'admin', avatar: 'AT' };
+    const [token, setToken] = useState(() => {
+        return sessionStorage.getItem('trafiq_token') || null;
+    });
+
+    const login = async (email, password) => {
+        try {
+            const res = await fetch(`${API_BASE_URL}/auth/login`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password }),
+            });
+
+            if (!res.ok) {
+                return false;
+            }
+
+            const data = await res.json();
+            const userData = data.user;
+            const accessToken = data.access_token;
+
             sessionStorage.setItem('trafiq_admin', JSON.stringify(userData));
+            sessionStorage.setItem('trafiq_token', accessToken);
             setUser(userData);
+            setToken(accessToken);
             return true;
+        } catch {
+            return false;
         }
-        return false;
     };
 
     const logout = () => {
         sessionStorage.removeItem('trafiq_admin');
+        sessionStorage.removeItem('trafiq_token');
         setUser(null);
+        setToken(null);
     };
 
+    const isSuperAdmin = user?.role === 'SUPER_ADMIN';
+    const isAdmin = user?.role === 'ADMIN';
+
     return (
-        <AuthContext.Provider value={{ user, login, logout, isAuthenticated: !!user }}>
+        <AuthContext.Provider
+            value={{
+                user,
+                token,
+                login,
+                logout,
+                isAuthenticated: !!user && !!token,
+                isSuperAdmin,
+                isAdmin,
+            }}
+        >
             {children}
         </AuthContext.Provider>
     );

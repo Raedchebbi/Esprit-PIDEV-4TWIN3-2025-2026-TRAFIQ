@@ -1,0 +1,1 @@
+﻿sonar-scanner -Dsonar.host.url=http://localhost:9000 -Dsonar.token=sqa_1d91ff4a9cadc1f64f3c7c28b41288db0875a259 -Dsonar.projectKey=raedchebbi-esprit-pidev-4twin3-2025-2026-trafiq-frontend -Dsonar.projectName=TRAFIQ-Frontend -Dsonar.sources=frontend/src -Dsonar.tests=frontend/src -Dsonar.javascript.lcov.reportPaths=frontend/coverage/lcov.info

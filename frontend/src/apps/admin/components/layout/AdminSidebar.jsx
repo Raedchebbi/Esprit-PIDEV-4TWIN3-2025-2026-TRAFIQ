@@ -4,18 +4,8 @@ import { useAuth } from '../../../../shared/context/AuthContext';
 import { trafiqApi } from '../../../../shared/services/trafiqApi';
 import './AdminSidebar.css';
 
-const navItems = [
-    { path: '/admin/dashboard',   icon: '🏠', label: 'Vue d\'ensemble' },
-    { path: '/admin/live',        icon: '📹', label: 'Live Monitoring' },
-    { path: '/admin/incidents',   icon: '⚠️', label: 'Incidents', badge: true },
-    { path: '/admin/congestion',  icon: '🚦', label: 'Congestion' },
-    { path: '/admin/ai-agent',    icon: '🤖', label: 'Agent IA' },
-    { path: '/admin/analytics',   icon: '📊', label: 'Analytics' },
-    { path: '/admin/settings',    icon: '⚙️', label: 'Paramètres' },
-];
-
 export default function AdminSidebar() {
-    const { user, logout } = useAuth();
+    const { user, logout, isSuperAdmin } = useAuth();
     const navigate = useNavigate();
     const [incidentCount, setIncidentCount] = useState(0);
 
@@ -34,13 +24,53 @@ export default function AdminSidebar() {
         navigate('/');
     };
 
+    // Build nav items based on role
+    const navItems = [
+        { path: '/admin/dashboard',   icon: '🏠', label: 'Vue d\'ensemble' },
+        { path: '/admin/live',        icon: '📹', label: 'Live Monitoring' },
+        { path: '/admin/incidents',   icon: '⚠️', label: 'Incidents', badge: true },
+        { path: '/admin/congestion',  icon: '🚦', label: 'Congestion' },
+        { path: '/admin/ai-agent',    icon: '🤖', label: 'Agent IA' },
+        { path: '/admin/analytics',   icon: '📊', label: 'Analytics' },
+        { path: '/admin/settings',    icon: '⚙️', label: 'Paramètres' },
+    ];
+
+    // SUPER_ADMIN gets the admin management page
+    if (isSuperAdmin) {
+        navItems.push({
+            path: '/admin/admin-management',
+            icon: '👥',
+            label: 'Gestion Admins',
+            superOnly: true,
+        });
+    }
+
+    const roleBadge = isSuperAdmin ? 'SUPER ADMIN' : 'ADMIN';
+    const roleColor = isSuperAdmin ? '#8B5CF6' : '#00ACC1';
+
     return (
         <aside className="adm-sidebar">
             {/* Header */}
             <div className="adm-sb-header">
                 <span className="adm-sb-logo">TRAFIQ</span>
-                <span className="adm-sb-badge">ADMIN PANEL</span>
+                <span className="adm-sb-badge" style={{ background: roleColor }}>
+                    {roleBadge}
+                </span>
             </div>
+
+            {/* Country Scope Indicator */}
+            {user?.country && (
+                <div className="adm-sb-scope">
+                    <span className="adm-sb-scope-icon">🏳</span>
+                    <span className="adm-sb-scope-text">{user.country}</span>
+                </div>
+            )}
+            {isSuperAdmin && (
+                <div className="adm-sb-scope adm-sb-scope-global">
+                    <span className="adm-sb-scope-icon">🌍</span>
+                    <span className="adm-sb-scope-text">Accès Global</span>
+                </div>
+            )}
 
             {/* Navigation */}
             <nav className="adm-sb-nav">
@@ -48,12 +78,15 @@ export default function AdminSidebar() {
                     <NavLink
                         key={item.path}
                         to={item.path}
-                        className={({ isActive }) => `adm-sb-item ${isActive ? 'adm-sb-item-active' : ''}`}
+                        className={({ isActive }) => `adm-sb-item ${isActive ? 'adm-sb-item-active' : ''} ${item.superOnly ? 'adm-sb-item-super' : ''}`}
                     >
                         <span className="adm-sb-item-icon">{item.icon}</span>
                         <span className="adm-sb-item-label">{item.label}</span>
                         {item.badge && incidentCount > 0 && (
                             <span className="adm-sb-item-badge">{incidentCount}</span>
+                        )}
+                        {item.superOnly && (
+                            <span className="adm-sb-super-tag">SA</span>
                         )}
                     </NavLink>
                 ))}
@@ -76,10 +109,15 @@ export default function AdminSidebar() {
 
             {/* User Footer */}
             <div className="adm-sb-footer">
-                <div className="adm-sb-avatar">{user?.avatar || 'AT'}</div>
+                <div className="adm-sb-avatar" style={{ background: roleColor }}>
+                    {user?.avatar || user?.name?.split(' ').map(w => w[0]).join('').slice(0, 2) || 'AT'}
+                </div>
                 <div className="adm-sb-user-info">
                     <div className="adm-sb-user-name">{user?.name || 'Admin TRAFIQ'}</div>
                     <div className="adm-sb-user-email">{user?.email}</div>
+                    {user?.country && (
+                        <div className="adm-sb-user-country">📍 {user.country}</div>
+                    )}
                 </div>
                 <button className="adm-sb-logout" onClick={handleLogout} title="Déconnexion">↩</button>
             </div>

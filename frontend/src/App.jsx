@@ -2,7 +2,9 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './shared/context/AuthContext';
 import { TrafikProvider } from './shared/context/TrafikContext';
+import { RouteSessionProvider } from './shared/context/RouteSessionContext';
 import PublicApp from './apps/public/PublicApp';
+import Home from './apps/public/pages/Home';
 import AdminApp from './apps/admin/AdminApp';
 import AdminLogin from './apps/admin/pages/Login';
 import RoutePlanner from './apps/public/pages/RoutePlanner';
@@ -20,10 +22,17 @@ export default function App() {
       <AuthProvider>
         <TrafikProvider>
           <Routes>
-            {/* Public */}
-            <Route path="/" element={<PublicApp />} />
-            <Route path="/plan" element={<RoutePlanner />} />
-            <Route path="/routes" element={<RouteStatus />} />
+            <Route
+              element={
+                <RouteSessionProvider>
+                  <PublicApp />
+                </RouteSessionProvider>
+              }
+            >
+              <Route index element={<Home />} />
+              <Route path="plan" element={<RoutePlanner />} />
+              <Route path="routes" element={<RouteStatus />} />
+            </Route>
 
             {/* Admin */}
             <Route path="/admin" element={<Navigate to="/admin/login" replace />} />

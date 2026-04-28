@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="jest tests" tests="10" failures="0" errors="0" time="4.055">
+  <testsuite name="MetricsService" errors="0" failures="0" skipped="0" timestamp="2026-04-28T18:59:58" time="2.415" tests="2">
+    <testcase classname="MetricsService records request counters and durations in the Prometheus registry" name="MetricsService records request counters and durations in the Prometheus registry" time="0.128">
+    </testcase>
+    <testcase classname="MetricsService exposes the Prometheus content type for the metrics endpoint" name="MetricsService exposes the Prometheus content type for the metrics endpoint" time="0.018">
+    </testcase>
+  </testsuite>
+  <testsuite name="AccidentsService" errors="0" failures="0" skipped="0" timestamp="2026-04-28T18:59:58" time="2.679" tests="1">
+    <testcase classname="AccidentsService should be defined" name="AccidentsService should be defined" time="0.101">
+    </testcase>
+  </testsuite>
+  <testsuite name="AppController" errors="0" failures="0" skipped="0" timestamp="2026-04-28T18:59:58" time="2.753" tests="2">
+    <testcase classname="AppController root should return &quot;Hello World!&quot;" name="AppController root should return &quot;Hello World!&quot;" time="0.061">
+    </testcase>
+    <testcase classname="AppController health should expose a kubernetes-friendly health payload" name="AppController health should expose a kubernetes-friendly health payload" time="0.015">
+    </testcase>
+  </testsuite>
+  <testsuite name="NavigationService" errors="0" failures="0" skipped="0" timestamp="2026-04-28T18:59:58" time="2.922" tests="2">
+    <testcase classname="NavigationService returns scoped accident and congestion alerts for an active session" name="NavigationService returns scoped accident and congestion alerts for an active session" time="0.014">
+    </testcase>
+    <testcase classname="NavigationService marks nearby incidents as relevant for subscribed sessions" name="NavigationService marks nearby incidents as relevant for subscribed sessions" time="0.004">
+    </testcase>
+  </testsuite>
+  <testsuite name="PublicApiService" errors="0" failures="0" skipped="0" timestamp="2026-04-28T18:59:58" time="2.937" tests="2">
+    <testcase classname="PublicApiService enriches public incidents with camera coordinates" name="PublicApiService enriches public incidents with camera coordinates" time="0.011">
+    </testcase>
+    <testcase classname="PublicApiService returns AI-labelled route suggestions for the planner" name="PublicApiService returns AI-labelled route suggestions for the planner" time="0.005">
+    </testcase>
+  </testsuite>
+  <testsuite name="AccidentsController" errors="0" failures="0" skipped="0" timestamp="2026-04-28T18:59:58" time="3.084" tests="1">
+    <testcase classname="AccidentsController should be defined" name="AccidentsController should be defined" time="0.027">
+    </testcase>
+  </testsuite>
+</testsuites>

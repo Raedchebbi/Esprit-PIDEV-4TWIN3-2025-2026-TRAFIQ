@@ -109,7 +109,7 @@ export default function LiveMonitoring() {
                                     className={`adm-live-cell ${focusedFeed === feed.id ? 'adm-cell-focused' : ''} ${focusedFeed && focusedFeed !== feed.id ? 'adm-cell-hidden' : ''}`}
                                     onClick={() => setFocusedFeed(focusedFeed === feed.id ? null : feed.id)}
                                 >
-                                    <FeedPanel feed={feed} cityId={city.id} onLocate={(camId) => navigate(`/admin/dashboard?cam=${camId}`)} />
+                                    <FeedPanel feed={feed} onLocate={(camId) => navigate(`/admin/dashboard?cam=${camId}`)} />
                                 </div>
                             ))}
                         </div>
@@ -121,7 +121,7 @@ export default function LiveMonitoring() {
 }
 
 // ─── Individual feed panel ────────────────────────────────────────────────────
-function FeedPanel({ feed, cityId, onLocate }) {
+function FeedPanel({ feed, onLocate }) {
     return (
         <div className="adm-feed-panel">
             <div className="adm-feed-bar">

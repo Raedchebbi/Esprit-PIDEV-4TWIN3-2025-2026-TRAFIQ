@@ -7,17 +7,25 @@ export default function AdminLogin() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
+    const [loading, setLoading] = useState(false);
     const { login } = useAuth();
     const navigate = useNavigate();
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
-        const success = login(email, password);
-        if (success) {
-            navigate('/admin/dashboard');
-        } else {
-            setError('Identifiants incorrects');
+        setLoading(true);
+        try {
+            const success = await login(email, password);
+            if (success) {
+                navigate('/admin/dashboard');
+            } else {
+                setError('Identifiants incorrects');
+            }
+        } catch {
+            setError('Erreur de connexion au serveur');
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -41,10 +49,14 @@ export default function AdminLogin() {
                             <span className="adm-feat-icon">📹</span>
                             <div className="adm-feat-text">Monitoring caméras</div>
                         </div>
+                        <div className="adm-feat-item">
+                            <span className="adm-feat-icon">🌍</span>
+                            <div className="adm-feat-text">Multi-pays hiérarchique</div>
+                        </div>
                     </div>
 
                     <div className="adm-login-footer">
-                        TRAFIQ Engine v9.1 · best.pt Active
+                        TRAFIQ Engine v9.1 · best.pt Active · RBAC Enabled
                     </div>
                 </div>
             </div>
@@ -64,6 +76,7 @@ export default function AdminLogin() {
                                 value={email}
                                 onChange={e => setEmail(e.target.value)}
                                 required
+                                disabled={loading}
                             />
                         </div>
 
@@ -75,12 +88,15 @@ export default function AdminLogin() {
                                 value={password}
                                 onChange={e => setPassword(e.target.value)}
                                 required
+                                disabled={loading}
                             />
                         </div>
 
                         {error && <div className="adm-login-error">{error}</div>}
 
-                        <button type="submit" className="adm-login-submit">Connexion</button>
+                        <button type="submit" className="adm-login-submit" disabled={loading}>
+                            {loading ? 'Connexion...' : 'Connexion'}
+                        </button>
                     </form>
 
                     <Link to="/" className="adm-login-back">← Retour au site public</Link>

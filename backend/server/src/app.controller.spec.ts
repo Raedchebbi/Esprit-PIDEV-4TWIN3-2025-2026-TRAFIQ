@@ -19,4 +19,13 @@ describe('AppController', () => {
       expect(appController.getHello()).toBe('Hello World!');
     });
   });
+
+  describe('health', () => {
+    it('should expose a kubernetes-friendly health payload', () => {
+      expect(appController.getHealth()).toEqual({
+        status: 'ok',
+        service: 'trafiq-backend',
+      });
+    });
+  });
 });

@@ -183,3 +183,46 @@
     background: rgba(255, 255, 255, 0.1);
     color: #fff;
 }
+
+/* ── Scope Indicator ───────────────────────────────────────────────────────────*/
+.adm-sb-scope {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 20px;
+    font-size: 0.78rem;
+    color: #81D4FA;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+}
+.adm-sb-scope-global {
+    color: #FFD54F;
+}
+.adm-sb-scope-icon {
+    font-size: 0.9rem;
+}
+.adm-sb-scope-text {
+    font-weight: 600;
+    letter-spacing: 0.3px;
+}
+
+/* ── Super Admin Nav Tag ───────────────────────────────────────────────────────*/
+.adm-sb-item-super {
+    border-left-color: rgba(139, 92, 246, 0.3);
+}
+.adm-sb-super-tag {
+    margin-left: auto;
+    background: rgba(139, 92, 246, 0.25);
+    color: #B39DDB;
+    font-size: 0.58rem;
+    font-weight: 700;
+    padding: 1px 5px;
+    border-radius: 3px;
+    letter-spacing: 0.5px;
+}
+
+/* ── User Country in Footer ────────────────────────────────────────────────────*/
+.adm-sb-user-country {
+    color: #81D4FA;
+    font-size: 0.65rem;
+    margin-top: 2px;
+}

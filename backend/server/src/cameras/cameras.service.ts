@@ -30,10 +30,13 @@ export class CamerasService implements OnModuleInit {
   private loadConfig() {
     try {
       const raw = fs.readFileSync(this.configPath, 'utf-8');
-      const data = JSON.parse(raw);
-      this.cameras = (data.cameras ?? []).filter(
-        (c: CameraEntry) => c.enabled !== false,
-      );
+      const parsed: unknown = JSON.parse(raw);
+      const cameras =
+        typeof parsed === 'object' && parsed !== null && 'cameras' in parsed
+          ? ((parsed as { cameras?: CameraEntry[] }).cameras ?? [])
+          : [];
+
+      this.cameras = cameras.filter((c: CameraEntry) => c.enabled !== false);
       this.logger.log(
         `Loaded ${this.cameras.length} camera(s) from ${this.configPath}`,
       );
@@ -47,5 +50,18 @@ export class CamerasService implements OnModuleInit {
     // Re-read on every request so changes to cameras.json are picked up without restart
     this.loadConfig();
     return this.cameras;
+  }
+
+  /** Return only cameras whose `area` matches the given country. */
+  findByCountry(country: string): CameraEntry[] {
+    this.loadConfig();
+    return this.cameras.filter(
+      (c) => c.area?.toLowerCase() === country.toLowerCase(),
+    );
+  }
+
+  /** Return camera IDs belonging to a given country. */
+  getCameraIdsForCountry(country: string): string[] {
+    return this.findByCountry(country).map((c) => c.id);
   }
 }

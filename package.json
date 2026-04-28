@@ -1,0 +1,11 @@
+{
+  "name": "trafiq-workspace",
+  "private": true,
+  "scripts": {
+    "install:all": "npm install --prefix frontend && npm install --prefix backend/server",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "dev:backend": "npm --prefix backend/server run start:dev",
+    "lint": "npm --prefix frontend run lint && npm --prefix backend/server run lint",
+    "test": "npm --prefix frontend run test && npm --prefix backend/server run test"
+  }
+}

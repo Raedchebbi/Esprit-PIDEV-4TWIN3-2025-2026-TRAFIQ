@@ -1,0 +1,33 @@
+grafana:
+  enabled: true
+
+alertmanager:
+  enabled: true
+  alertmanagerSpec:
+    configSecret: trafiq-alertmanager-config
+
+prometheus:
+  prometheusSpec:
+    scrapeInterval: 30s
+    evaluationInterval: 30s
+    retention: 10d
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+    probeSelectorNilUsesHelmValues: false
+    externalLabels:
+      cluster: trafiq-kubeadm
+
+# Bare-metal kubeadm clusters often do not expose all managed control-plane endpoints
+# in a way that matches the chart defaults, so these monitors are disabled to reduce noise.
+kubeEtcd:
+  enabled: false
+
+kubeScheduler:
+  enabled: false
+
+kubeControllerManager:
+  enabled: false
+
+kubeProxy:
+  enabled: false

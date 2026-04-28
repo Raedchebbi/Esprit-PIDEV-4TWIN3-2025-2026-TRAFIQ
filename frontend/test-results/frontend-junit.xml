@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<testsuites name="vitest tests" tests="7" failures="0" errors="0" time="1.4930583">
+    <testsuite name="src/shared/context/AuthContext.test.jsx" timestamp="2026-04-28T19:02:17.796Z" hostname="DESKTOP-HLLL27L" tests="3" failures="0" errors="0" skipped="0" time="0.5207279">
+        <testcase classname="src/shared/context/AuthContext.test.jsx" name="AuthContext &gt; hydrates an existing session from sessionStorage" time="0.0616917">
+        </testcase>
+        <testcase classname="src/shared/context/AuthContext.test.jsx" name="AuthContext &gt; stores the user and token after a successful login" time="0.3868389">
+        </testcase>
+        <testcase classname="src/shared/context/AuthContext.test.jsx" name="AuthContext &gt; clears the session on logout" time="0.0681089">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/apps/public/components/NavigationOverlay.test.jsx" timestamp="2026-04-28T19:02:17.797Z" hostname="DESKTOP-HLLL27L" tests="2" failures="0" errors="0" skipped="0" time="0.4705562">
+        <testcase classname="src/apps/public/components/NavigationOverlay.test.jsx" name="NavigationOverlay &gt; renders active navigation state" time="0.120166">
+        </testcase>
+        <testcase classname="src/apps/public/components/NavigationOverlay.test.jsx" name="NavigationOverlay &gt; calls endNavigation from the context" time="0.3452539">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/apps/public/components/RouteRecommendationCard.test.jsx" timestamp="2026-04-28T19:02:17.799Z" hostname="DESKTOP-HLLL27L" tests="2" failures="0" errors="0" skipped="0" time="0.5017742">
+        <testcase classname="src/apps/public/components/RouteRecommendationCard.test.jsx" name="RouteRecommendationCard &gt; renders backend-driven route details" time="0.1429755">
+        </testcase>
+        <testcase classname="src/apps/public/components/RouteRecommendationCard.test.jsx" name="RouteRecommendationCard &gt; starts navigation when the CTA is clicked" time="0.3539267">
+        </testcase>
+    </testsuite>
+</testsuites>

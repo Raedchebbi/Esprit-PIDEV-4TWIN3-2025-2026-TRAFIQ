@@ -54,17 +54,6 @@ function computeCongestion(vehicleCount) {
     return { level: 'Fluide', color: '#43A047' };
 }
 
-// ─── Dynamic marker icon ──────────────────────────────────────────────────────
-const riskIcon = (color, pulse) => L.divIcon({
-    html: `<div style="
-        width:18px;height:18px;border-radius:50%;
-        background:${color};border:2px solid rgba(255,255,255,0.8);
-        box-shadow:0 0 ${pulse?'14px':'6px'} ${color};
-        ${pulse?'animation:pulse 1s infinite;':''}
-    "></div>`,
-    className: '', iconAnchor: [9, 9],
-});
-
 const cityIcon = (color, count, label) => L.divIcon({
     html: `<div style="
         background:${color};color:#fff;font-size:0.65rem;font-weight:800;

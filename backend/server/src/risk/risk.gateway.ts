@@ -23,6 +23,7 @@
 // NestJS re-broadcasts those events to all connected browser clients.
 // =============================================================
 
+import { Inject, forwardRef } from '@nestjs/common';
 import {
   WebSocketGateway,
   WebSocketServer,
@@ -31,13 +32,30 @@ import {
   OnGatewayDisconnect,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
+import { PublicGateway } from '../navigation/public.gateway';
 import { VehicleCountsStore } from './vehicle-counts.store';
+import type { VehicleCountsSnapshot } from './vehicle-counts.store';
 
-@WebSocketGateway({ cors: { origin: '*' } })
+const gatewayCorsOrigin = process.env.CORS_ORIGIN || '*';
+const gatewayNamespace = process.env.WS_NAMESPACE || '/';
+
+@WebSocketGateway({
+  namespace: gatewayNamespace,
+  cors: {
+    origin:
+      gatewayCorsOrigin === '*'
+        ? '*'
+        : gatewayCorsOrigin.split(',').map((origin) => origin.trim()),
+  },
+})
 export class RiskGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer() server: Server;
 
-  constructor(private readonly vehicleCounts: VehicleCountsStore) {}
+  constructor(
+    private readonly vehicleCounts: VehicleCountsStore,
+    @Inject(forwardRef(() => PublicGateway))
+    private readonly publicGateway: PublicGateway,
+  ) {}
 
   handleConnection(client: Socket) {
     console.log(`[RiskGateway] Client connected:    ${client.id}`);
@@ -65,6 +83,11 @@ export class RiskGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @SubscribeMessage('incident_confirmed')
   handleIncidentConfirmed(client: Socket, data: unknown): void {
     this.server.emit('new_incident', data);
+    if (data && typeof data === 'object') {
+      this.publicGateway.broadcastIncidentToRelevantSessions(
+        data as Record<string, unknown>,
+      );
+    }
   }
 
   /**
@@ -83,8 +106,9 @@ export class RiskGateway implements OnGatewayConnection, OnGatewayDisconnect {
    * We store the latest snapshot and re-broadcast to frontend clients.
    */
   @SubscribeMessage('vehicle_counts')
-  handleVehicleCounts(client: Socket, data: any): void {
+  handleVehicleCounts(client: Socket, data: VehicleCountsSnapshot): void {
     this.vehicleCounts.update(data);
     this.server.emit('vehicle_counts', data);
+    this.publicGateway.broadcastCongestionUpdate();
   }
 }

@@ -16,6 +16,11 @@ export interface VehicleCountsSnapshot {
 @Injectable()
 export class VehicleCountsStore {
   private readonly logger = new Logger(VehicleCountsStore.name);
+  private latestSnapshot: VehicleCountsSnapshot = {
+    total: 0,
+    per_camera: [],
+    timestamp: '',
+  };
   private readonly filePath = path.resolve(
     process.cwd(),
     '../ai-engine/vehicle_counts.json',
@@ -23,18 +28,22 @@ export class VehicleCountsStore {
 
   /** Called by the WebSocket gateway when a live event arrives. */
   update(data: VehicleCountsSnapshot): void {
-    // Socket events also write to the file for consistency,
-    // but the primary source is the file written by the AI engine.
+    this.latestSnapshot = data;
   }
 
   /** Read the latest counts from the file written by the AI engine. */
   getLatest(): VehicleCountsSnapshot {
     try {
+      if (this.latestSnapshot.timestamp) {
+        return this.latestSnapshot;
+      }
+
       if (!fs.existsSync(this.filePath)) {
         return { total: 0, per_camera: [], timestamp: '' };
       }
       const raw = fs.readFileSync(this.filePath, 'utf-8');
-      return JSON.parse(raw) as VehicleCountsSnapshot;
+      this.latestSnapshot = JSON.parse(raw) as VehicleCountsSnapshot;
+      return this.latestSnapshot;
     } catch (err) {
       this.logger.warn(`Failed to read vehicle counts: ${err}`);
       return { total: 0, per_camera: [], timestamp: '' };

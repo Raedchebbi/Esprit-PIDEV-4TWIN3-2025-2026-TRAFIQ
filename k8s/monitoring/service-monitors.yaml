@@ -1,0 +1,36 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: trafiq-backend
+  namespace: monitoring
+spec:
+  namespaceSelector:
+    matchNames:
+      - trafiq
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: trafiq-backend
+  jobLabel: app.kubernetes.io/name
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 30s
+      scrapeTimeout: 10s
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: trafiq-frontend
+  namespace: monitoring
+spec:
+  namespaceSelector:
+    matchNames:
+      - trafiq
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: trafiq-frontend
+  jobLabel: app.kubernetes.io/name
+  endpoints:
+    - port: metrics
+      interval: 30s
+      scrapeTimeout: 10s

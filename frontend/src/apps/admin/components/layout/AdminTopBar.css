@@ -101,3 +101,44 @@
     font-weight: 700;
     color: #455A64;
 }
+
+/* ── Scope Indicator ───────────────────────────────────────────────────────────*/
+.adm-tb-scope {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: 12px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: #0097A7;
+    padding: 3px 10px;
+    border-radius: 12px;
+    background: rgba(0, 151, 167, 0.08);
+}
+.adm-tb-scope-global {
+    color: #E65100;
+    background: rgba(230, 81, 0, 0.08);
+}
+.adm-tb-scope-flag {
+    font-size: 0.82rem;
+}
+
+/* ── Role Badge ────────────────────────────────────────────────────────────────*/
+.adm-tb-role-badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+}
+.adm-tb-role-badge.super {
+    background: linear-gradient(135deg, rgba(108, 99, 255, 0.15), rgba(139, 92, 246, 0.15));
+    color: #6C63FF;
+    border: 1px solid rgba(108, 99, 255, 0.25);
+}
+.adm-tb-role-badge.admin {
+    background: rgba(0, 172, 193, 0.1);
+    color: #0097A7;
+    border: 1px solid rgba(0, 172, 193, 0.2);
+}

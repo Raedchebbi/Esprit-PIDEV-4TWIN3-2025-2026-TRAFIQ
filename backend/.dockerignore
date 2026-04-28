@@ -1,0 +1,10 @@
+server/node_modules
+server/dist
+server/coverage
+server/test-results
+ai-engine/models
+ai-engine/videos
+ai-engine/dataset
+**/.git
+**/.github
+**/npm-debug.log

@@ -1,7 +1,10 @@
 import React from 'react';
+import { useAuth } from '../../../shared/context/AuthContext';
 import './Settings.css';
 
 export default function Settings() {
+    const { user, isSuperAdmin } = useAuth();
+
     return (
         <div className="adm-settings-page">
             <div className="adm-settings-header">
@@ -10,14 +13,42 @@ export default function Settings() {
 
             <div className="adm-settings-content">
                 <aside className="adm-settings-sidebar">
-                    <button className="adm-set-nav active">Système</button>
+                    <button className="adm-set-nav active">Compte</button>
+                    <button className="adm-set-nav">Système</button>
                     <button className="adm-set-nav">Caméras</button>
                     <button className="adm-set-nav">Zones & Routes</button>
                     <button className="adm-set-nav">Notifications</button>
-                    <button className="adm-set-nav">Compte</button>
                 </aside>
 
                 <div className="adm-settings-panel">
+                    {/* Account Info Section */}
+                    <section className="adm-set-section">
+                        <h3>Informations du Compte</h3>
+                        <div className="adm-set-account-grid">
+                            <div className="adm-set-account-row">
+                                <span className="adm-set-account-label">Nom</span>
+                                <span className="adm-set-account-value">{user?.name || '—'}</span>
+                            </div>
+                            <div className="adm-set-account-row">
+                                <span className="adm-set-account-label">Email</span>
+                                <span className="adm-set-account-value">{user?.email || '—'}</span>
+                            </div>
+                            <div className="adm-set-account-row">
+                                <span className="adm-set-account-label">Rôle</span>
+                                <span className={`adm-set-role-badge ${isSuperAdmin ? 'super' : 'admin'}`}>
+                                    {user?.role || '—'}
+                                </span>
+                            </div>
+                            <div className="adm-set-account-row">
+                                <span className="adm-set-account-label">Portée</span>
+                                <span className="adm-set-account-value">
+                                    {isSuperAdmin ? '🌍 Accès global (tous les pays)' : `🏳 ${user?.country || '—'}`}
+                                </span>
+                            </div>
+                        </div>
+                    </section>
+
+                    {/* Alert Radius */}
                     <section className="adm-set-section">
                         <h3>Configuration du rayon d'alerte</h3>
                         <p>Définit dans quel périmètre les conducteurs reçoivent une notification d'accident.</p>
@@ -31,6 +62,7 @@ export default function Settings() {
                         </div>
                     </section>
 
+                    {/* Auto Notifications */}
                     <section className="adm-set-section">
                         <h3>Notifications automatiques</h3>
                         <div className="adm-set-row jc-sb">
@@ -42,6 +74,7 @@ export default function Settings() {
                         </div>
                     </section>
 
+                    {/* Alert Log */}
                     <section className="adm-set-section">
                         <h3>Journal des alertes envoyées</h3>
                         <div className="adm-set-log">

@@ -80,4 +80,75 @@ export class AccidentsService {
     if (removed > 0) this.writeAll(filtered);
     return removed;
   }
+
+  // ── Country-scoped variants ─────────────────────────────────────────────────
+
+  /** Returns all incidents for cameras belonging to the given country. */
+  findAllByCountry(cameraIds: string[]): Accident[] {
+    return this.readAll()
+      .filter((inc) => cameraIds.includes(inc.camera_id))
+      .reverse()
+      .slice(0, 100);
+  }
+
+  /** Returns active (non-false-positive) incidents for a specific country. */
+  findActiveByCountry(cameraIds: string[]): Accident[] {
+    return this.readAll()
+      .filter((inc) => !inc.false_positive && cameraIds.includes(inc.camera_id))
+      .reverse()
+      .slice(0, 100);
+  }
+
+  /** Flag false positives — only for incidents belonging to allowed cameras. */
+  flagFalsePositivesScoped(ids: string[], allowedCameraIds: string[]): number {
+    const all = this.readAll();
+    let count = 0;
+    for (const inc of all) {
+      if (
+        ids.includes(inc.incident_id) &&
+        allowedCameraIds.includes(inc.camera_id)
+      ) {
+        inc.false_positive = true;
+        count++;
+      }
+    }
+    if (count > 0) this.writeAll(all);
+    return count;
+  }
+
+  /** Unflag false positives — only for incidents belonging to allowed cameras. */
+  unflagFalsePositivesScoped(
+    ids: string[],
+    allowedCameraIds: string[],
+  ): number {
+    const all = this.readAll();
+    let count = 0;
+    for (const inc of all) {
+      if (
+        ids.includes(inc.incident_id) &&
+        inc.false_positive &&
+        allowedCameraIds.includes(inc.camera_id)
+      ) {
+        delete inc.false_positive;
+        count++;
+      }
+    }
+    if (count > 0) this.writeAll(all);
+    return count;
+  }
+
+  /** Remove incidents — only for incidents belonging to allowed cameras. */
+  removeIncidentsScoped(ids: string[], allowedCameraIds: string[]): number {
+    const all = this.readAll();
+    const filtered = all.filter(
+      (inc) =>
+        !(
+          ids.includes(inc.incident_id) &&
+          allowedCameraIds.includes(inc.camera_id)
+        ),
+    );
+    const removed = all.length - filtered.length;
+    if (removed > 0) this.writeAll(filtered);
+    return removed;
+  }
 }

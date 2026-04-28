@@ -10,6 +10,8 @@ TRAFIQ is a real-time, multi-camera traffic monitoring system that detects vehic
 
 ## Features
 
+- **Hierarchical access control** – strict RBAC system with `SUPER_ADMIN` (global access) and `ADMIN` roles (country-scoped data isolation enforced via JWT on the backend)
+- **Admin management portal** – graphical interface for `SUPER_ADMIN` to create, assign, and manage country-level admin users
 - **Dynamic camera registry** – single `cameras.json` config file drives AI engine, backend, and frontend — add new cameras without code changes
 - **Multi-camera YOLO detection** – concurrent sources (local MP4 + live HLS streams); iframe-only cameras auto-skipped by the AI engine
 - **Collision detection** – proximity-based + IoU overlap with multi-frame confirmation
@@ -35,7 +37,7 @@ TRAFIQ is a real-time, multi-camera traffic monitoring system that detects vehic
 | Layer | Technology |
 |-------|-----------|
 | **Frontend** | React 19 (Vite), React Router 7, React-Leaflet 5, Recharts 3 |
-| **Backend API** | NestJS 11 (TypeScript), Socket.io 4 |
+| **Backend API** | NestJS 11 (TypeScript), Socket.io 4, Passport (JWT Authentication) |
 | **AI Engine** | Python 3.11, Ultralytics YOLOv8, OpenCV, Groq SDK, python-socketio |
 | **LLM** | Groq Cloud – `meta-llama/llama-4-scout-17b-16e-instruct` |
 | **Storage** | File-based JSONL (`incidents.jsonl`) + JSON (`vehicle_counts.json`, `cameras.json`) + static snapshot images |
@@ -305,10 +307,10 @@ Open `http://localhost:5173`.
 
 ### 4. Admin Login
 
-| Field | Value |
-|-------|-------|
-| Email | `admin@trafiq.ai` |
-| Password | `trafiq2025` |
+| Role | Email | Password | Scope |
+|------|-------|----------|-------|
+| **SUPER_ADMIN** | `super@trafiq.ai` | `SuperAdmin2025!` | Global |
+| **ADMIN** | `admin@trafiq.ai` | `trafiq2025` | France |
 
 ---
 
@@ -322,7 +324,8 @@ Open `http://localhost:5173`.
 | **Congestion** | Real-time traffic density per zone with live vehicle counts and congestion levels |
 | **Agent IA** | AI engine metrics: avg confidence, risk distribution, pipeline status |
 | **Analytics** | Charts and historical data visualization |
-| **Settings** | System configuration |
+| **Gestion Admins** | (SUPER_ADMIN only) Create, assign, and manage country admins |
+| **Settings** | System configuration and personal account info with scope |
 
 ---
 
