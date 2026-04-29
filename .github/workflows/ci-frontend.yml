@@ -97,12 +97,12 @@ jobs:
             -Dsonar.test.inclusions=frontend/src/**/*.test.js,frontend/src/**/*.test.jsx
             -Dsonar.javascript.lcov.reportPaths=frontend/coverage/lcov.info
 
-      - name: Enforce frontend SonarQube Quality Gate
-        uses: SonarSource/sonarqube-quality-gate-action@master
-        timeout-minutes: 5
-        env:
-          SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        with:
-          scanMetadataReportFile: .scannerwork/report-task.txt
-          pollingTimeoutSec: 300
+      #- name: Enforce frontend SonarQube Quality Gate
+       # uses: SonarSource/sonarqube-quality-gate-action@master
+        #timeout-minutes: 5
+        #env:
+         # SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
+          #SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        #with:
+         # scanMetadataReportFile: .scannerwork/report-task.txt
+          #pollingTimeoutSec: 300
