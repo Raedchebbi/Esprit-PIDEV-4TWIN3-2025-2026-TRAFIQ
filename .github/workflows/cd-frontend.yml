@@ -11,7 +11,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: cd-frontend-main
+  group: cd-frontend-master
   cancel-in-progress: false
 
 jobs:
@@ -19,7 +19,7 @@ jobs:
     if: >
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.event == 'push' &&
-      github.event.workflow_run.head_branch == 'main'
+      github.event.workflow_run.head_branch == 'master'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
