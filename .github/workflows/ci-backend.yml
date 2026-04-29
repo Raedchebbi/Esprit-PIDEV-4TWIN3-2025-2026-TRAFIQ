@@ -91,7 +91,7 @@ jobs:
           args: >
             -Dproject.settings=sonar-project.properties
             -Dsonar.projectKey=raedchebbi-esprit-pidev-4twin3-2025-2026-trafiq-backend
-            -Dsonar.projectName=TRAFIQ Backend
+            -Dsonar.projectName=TRAFIQ-Backend
             -Dsonar.sources=backend/server/src
             -Dsonar.tests=backend/server/src,backend/server/test
             -Dsonar.test.inclusions=backend/server/src/**/*.spec.ts,backend/server/test/**/*.ts
