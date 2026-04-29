@@ -8,7 +8,7 @@ const statusConfig = {
 };
 
 export default function RouteCard({ route, onStart, selected }) {
-    const { label, labelColor, labelBg, roads, time, dist, status, incidents, isAccident, extraMin } = route;
+    const { label, labelColor, labelBg, roads, time, dist, status, incidents, isAccident } = route;
     const sc = statusConfig[status] || statusConfig.slow;
 
     return (
