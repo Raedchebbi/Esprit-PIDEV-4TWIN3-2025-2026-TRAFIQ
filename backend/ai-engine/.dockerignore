@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.env
+.env.*
+snapshots/
+videos/
+dataset/
+*.mp4
+incidents.jsonl
+vehicle_counts.json
+run_demo_videos.ps1

@@ -1,0 +1,48 @@
+name: CI AI Engine
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-ai-engine-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ai-engine-ci:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Compile AI Python files
+        working-directory: backend/ai-engine
+        run: python -m py_compile detect_video.py prompts.py
+
+      - name: Validate cameras config JSON
+        working-directory: backend/ai-engine
+        run: python -m json.tool cameras.json > /tmp/cameras.json
+
+      - name: Build AI engine image
+        uses: docker/build-push-action@v5
+        with:
+          context: backend/ai-engine
+          file: backend/ai-engine/Dockerfile
+          push: false
+          tags: trafiq-ai-engine:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

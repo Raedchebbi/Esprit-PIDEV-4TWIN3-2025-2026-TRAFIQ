@@ -20,8 +20,8 @@ export class VehicleCountsController {
   ) {}
 
   @Get()
-  getLatest(@Request() req: { user: RequestUser }) {
-    const snapshot = this.store.getLatest();
+  async getLatest(@Request() req: { user: RequestUser }) {
+    const snapshot = await this.store.getLatestAsync();
     const user = req.user;
 
     // SUPER_ADMIN: full data

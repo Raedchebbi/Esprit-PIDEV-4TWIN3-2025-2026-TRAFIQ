@@ -13,7 +13,10 @@ stringData:
       group_wait: 30s
       group_interval: 5m
       repeat_interval: 2h
-      # Replace the null receiver with email, Slack, or webhook receivers in production.
-      receiver: null-receiver
+      # Replace the demo webhook URL in the Kubernetes Secret before production use.
+      receiver: demo-webhook
     receivers:
-      - name: null-receiver
+      - name: demo-webhook
+        webhook_configs:
+          - url: 'http://alertmanager-webhook-placeholder.monitoring.svc.cluster.local:8080/alerts'
+            send_resolved: true

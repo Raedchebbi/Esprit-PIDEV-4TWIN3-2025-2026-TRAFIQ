@@ -10,9 +10,13 @@ function appendAlerts(setAlerts, incomingAlerts) {
     const nextAlerts = [...previousAlerts];
 
     for (const alert of incomingAlerts) {
-      const alertId = alert.id || alert.incident_id || `${alert.type}_${alert.cameraId || alert.cam_id || 'unknown'}`;
+      const alertId =
+        alert.id ||
+        alert.incident_id ||
+        `${alert.type}_${alert.cameraId || alert.cam_id || 'unknown'}`;
       const alreadyExists = nextAlerts.some(
-        (existing) => existing.id === alertId || existing.incident_id === alertId,
+        (existing) =>
+          existing.id === alertId || existing.incident_id === alertId,
       );
 
       if (!alreadyExists) {
@@ -47,7 +51,8 @@ export function usePublicSocket() {
       // Re-subscribe if we had an active session before reconnect
       if (subscribedSessionRef.current) {
         socket.emit('subscribe_route', {
-          sessionId: subscribedSessionRef.current,
+          sessionId: subscribedSessionRef.current.sessionId,
+          sessionToken: subscribedSessionRef.current.sessionToken,
         });
       }
     });
@@ -60,11 +65,7 @@ export function usePublicSocket() {
 
     socket.on('route_congestion_update', (data) => {
       setCongestionUpdate(data);
-      const normalizedAlerts = Array.isArray(data)
-        ? data
-        : data
-          ? [data]
-          : [];
+      const normalizedAlerts = Array.isArray(data) ? data : data ? [data] : [];
 
       if (normalizedAlerts.length > 0) {
         appendAlerts(setAlerts, normalizedAlerts);
@@ -80,10 +81,10 @@ export function usePublicSocket() {
   }, []);
 
   // Subscribe to route alerts for a navigation session
-  const subscribeToRoute = useCallback((sessionId) => {
-    subscribedSessionRef.current = sessionId;
+  const subscribeToRoute = useCallback((sessionId, sessionToken) => {
+    subscribedSessionRef.current = { sessionId, sessionToken };
     if (socketRef.current?.connected) {
-      socketRef.current.emit('subscribe_route', { sessionId });
+      socketRef.current.emit('subscribe_route', { sessionId, sessionToken });
     }
   }, []);
 
@@ -97,21 +98,27 @@ export function usePublicSocket() {
   }, []);
 
   // Update user position on the server
-  const updatePosition = useCallback((sessionId, lat, lng, heading, speed) => {
-    if (socketRef.current?.connected) {
-      socketRef.current.emit('update_position', {
-        sessionId,
-        lat,
-        lng,
-        heading,
-        speed,
-      });
-    }
-  }, []);
+  const updatePosition = useCallback(
+    (sessionId, lat, lng, heading, speed, sessionToken) => {
+      if (socketRef.current?.connected) {
+        socketRef.current.emit('update_position', {
+          sessionId,
+          sessionToken,
+          lat,
+          lng,
+          heading,
+          speed,
+        });
+      }
+    },
+    [],
+  );
 
   // Clear acknowledged alerts
   const dismissAlert = useCallback((alertId) => {
-    setAlerts((prev) => prev.filter((a) => a.incident_id !== alertId && a.id !== alertId));
+    setAlerts((prev) =>
+      prev.filter((a) => a.incident_id !== alertId && a.id !== alertId),
+    );
   }, []);
 
   const clearAlerts = useCallback(() => {

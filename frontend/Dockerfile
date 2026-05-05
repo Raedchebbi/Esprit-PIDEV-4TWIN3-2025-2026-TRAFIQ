@@ -20,6 +20,15 @@ RUN chmod +x /docker-entrypoint.d/40-runtime-config.sh
 COPY --from=build /app/dist /usr/share/nginx/html
 COPY public/runtime-config.js /usr/share/nginx/html/runtime-config.js
 
+RUN chown -R nginx:nginx \
+    /usr/share/nginx/html \
+    /var/cache/nginx \
+    /var/log/nginx \
+    /var/run \
+    /etc/nginx/conf.d
+
+USER nginx
+
 EXPOSE 8080
 
 CMD ["nginx", "-g", "daemon off;"]

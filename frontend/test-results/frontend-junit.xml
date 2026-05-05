@@ -1,23 +1,29 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<testsuites name="vitest tests" tests="7" failures="0" errors="0" time="1.4930583">
-    <testsuite name="src/shared/context/AuthContext.test.jsx" timestamp="2026-04-28T19:02:17.796Z" hostname="DESKTOP-HLLL27L" tests="3" failures="0" errors="0" skipped="0" time="0.5207279">
-        <testcase classname="src/shared/context/AuthContext.test.jsx" name="AuthContext &gt; hydrates an existing session from sessionStorage" time="0.0616917">
+<testsuites name="vitest tests" tests="9" failures="0" errors="0" time="0.8091082">
+    <testsuite name="src/shared/context/AuthContext.test.jsx" timestamp="2026-05-05T16:20:22.829Z" hostname="DESKTOP-HLLL27L" tests="3" failures="0" errors="0" skipped="0" time="0.2850104">
+        <testcase classname="src/shared/context/AuthContext.test.jsx" name="AuthContext &gt; hydrates an existing session from sessionStorage" time="0.044592">
         </testcase>
-        <testcase classname="src/shared/context/AuthContext.test.jsx" name="AuthContext &gt; stores the user and token after a successful login" time="0.3868389">
+        <testcase classname="src/shared/context/AuthContext.test.jsx" name="AuthContext &gt; stores the user and token after a successful login" time="0.2007332">
         </testcase>
-        <testcase classname="src/shared/context/AuthContext.test.jsx" name="AuthContext &gt; clears the session on logout" time="0.0681089">
-        </testcase>
-    </testsuite>
-    <testsuite name="src/apps/public/components/NavigationOverlay.test.jsx" timestamp="2026-04-28T19:02:17.797Z" hostname="DESKTOP-HLLL27L" tests="2" failures="0" errors="0" skipped="0" time="0.4705562">
-        <testcase classname="src/apps/public/components/NavigationOverlay.test.jsx" name="NavigationOverlay &gt; renders active navigation state" time="0.120166">
-        </testcase>
-        <testcase classname="src/apps/public/components/NavigationOverlay.test.jsx" name="NavigationOverlay &gt; calls endNavigation from the context" time="0.3452539">
+        <testcase classname="src/shared/context/AuthContext.test.jsx" name="AuthContext &gt; clears the session on logout" time="0.0373479">
         </testcase>
     </testsuite>
-    <testsuite name="src/apps/public/components/RouteRecommendationCard.test.jsx" timestamp="2026-04-28T19:02:17.799Z" hostname="DESKTOP-HLLL27L" tests="2" failures="0" errors="0" skipped="0" time="0.5017742">
-        <testcase classname="src/apps/public/components/RouteRecommendationCard.test.jsx" name="RouteRecommendationCard &gt; renders backend-driven route details" time="0.1429755">
+    <testsuite name="src/shared/services/publicApi.test.js" timestamp="2026-05-05T16:20:22.832Z" hostname="DESKTOP-HLLL27L" tests="2" failures="0" errors="0" skipped="0" time="0.0092042">
+        <testcase classname="src/shared/services/publicApi.test.js" name="publicApi navigation session token support &gt; sends sessionToken with position updates" time="0.0056315">
         </testcase>
-        <testcase classname="src/apps/public/components/RouteRecommendationCard.test.jsx" name="RouteRecommendationCard &gt; starts navigation when the CTA is clicked" time="0.3539267">
+        <testcase classname="src/shared/services/publicApi.test.js" name="publicApi navigation session token support &gt; sends sessionToken when ending navigation" time="0.0012897">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/apps/public/components/NavigationOverlay.test.jsx" timestamp="2026-05-05T16:20:22.834Z" hostname="DESKTOP-HLLL27L" tests="2" failures="0" errors="0" skipped="0" time="0.241698">
+        <testcase classname="src/apps/public/components/NavigationOverlay.test.jsx" name="NavigationOverlay &gt; renders active navigation state" time="0.0615667">
+        </testcase>
+        <testcase classname="src/apps/public/components/NavigationOverlay.test.jsx" name="NavigationOverlay &gt; calls endNavigation from the context" time="0.1777143">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/apps/public/components/RouteRecommendationCard.test.jsx" timestamp="2026-05-05T16:20:22.835Z" hostname="DESKTOP-HLLL27L" tests="2" failures="0" errors="0" skipped="0" time="0.2731956">
+        <testcase classname="src/apps/public/components/RouteRecommendationCard.test.jsx" name="RouteRecommendationCard &gt; renders backend-driven route details" time="0.0660514">
+        </testcase>
+        <testcase classname="src/apps/public/components/RouteRecommendationCard.test.jsx" name="RouteRecommendationCard &gt; starts navigation when the CTA is clicked" time="0.2048412">
         </testcase>
     </testsuite>
 </testsuites>

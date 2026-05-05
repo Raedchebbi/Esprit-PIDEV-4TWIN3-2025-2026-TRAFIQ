@@ -16,6 +16,7 @@ import * as bcrypt from 'bcryptjs';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
+import { MongoPrimaryRepository } from '../mongodb/mongo-primary.repository';
 import {
   User,
   JwtPayload,
@@ -35,43 +36,83 @@ export class AuthService implements OnModuleInit {
   );
   private users: User[] = [];
 
-  constructor(private readonly jwtService: JwtService) {}
+  constructor(
+    private readonly jwtService: JwtService,
+    private readonly mongoPrimary: MongoPrimaryRepository,
+  ) {}
 
   async onModuleInit() {
-    this.loadUsers();
+    await this.loadUsers();
 
-    // Seed default SUPER_ADMIN if no users exist
     if (this.users.length === 0) {
-      this.logger.log('No users found — seeding default SUPER_ADMIN...');
-      const hashed = await bcrypt.hash('SuperAdmin2025!', SALT_ROUNDS);
+      await this.seedInitialUsers();
+    }
+  }
+
+  private async seedInitialUsers(): Promise<void> {
+    const initialEmail = process.env.INITIAL_SUPER_ADMIN_EMAIL;
+    const initialPassword = process.env.INITIAL_SUPER_ADMIN_PASSWORD;
+    const initialName = process.env.INITIAL_SUPER_ADMIN_NAME ?? 'Super Admin';
+
+    if (initialEmail && initialPassword) {
+      const hashed = await bcrypt.hash(initialPassword, SALT_ROUNDS);
       const superAdmin: User = {
         id: this.generateId(),
-        email: 'super@trafiq.ai',
-        name: 'Super Admin',
+        email: initialEmail,
+        name: initialName,
         password: hashed,
         role: 'SUPER_ADMIN',
         createdAt: new Date().toISOString(),
       };
-
-      // Also seed a demo ADMIN for France (backward compat with the old hardcoded cred)
-      const adminHash = await bcrypt.hash('trafiq2025', SALT_ROUNDS);
-      const demoAdmin: User = {
-        id: this.generateId(),
-        email: 'admin@trafiq.ai',
-        name: 'Admin TRAFIQ',
-        password: adminHash,
-        role: 'ADMIN',
-        country: 'France',
-        createdAt: new Date().toISOString(),
-        createdBy: superAdmin.id,
-      };
-
-      this.users = [superAdmin, demoAdmin];
-      this.saveUsers();
+      this.users = [superAdmin];
+      await this.saveUsers();
       this.logger.log(
-        `Seeded SUPER_ADMIN (super@trafiq.ai) and demo ADMIN (admin@trafiq.ai → France)`,
+        `Seeded initial SUPER_ADMIN from environment: ${initialEmail}`,
       );
+      return;
     }
+
+    if (process.env.NODE_ENV === 'production') {
+      this.logger.warn(
+        'No users found and INITIAL_SUPER_ADMIN_EMAIL/INITIAL_SUPER_ADMIN_PASSWORD are not set. Skipping production seeding.',
+      );
+      return;
+    }
+
+    if (process.env.SEED_DEMO_USERS === 'false') {
+      this.logger.warn(
+        'No users found and SEED_DEMO_USERS=false. Skipping demo seeding.',
+      );
+      return;
+    }
+
+    this.logger.warn(
+      'No users found — seeding local demo users for non-production only.',
+    );
+    const hashed = await bcrypt.hash('SuperAdmin2025!', SALT_ROUNDS);
+    const superAdmin: User = {
+      id: this.generateId(),
+      email: 'super@trafiq.ai',
+      name: 'Super Admin',
+      password: hashed,
+      role: 'SUPER_ADMIN',
+      createdAt: new Date().toISOString(),
+    };
+
+    const adminHash = await bcrypt.hash('trafiq2025', SALT_ROUNDS);
+    const demoAdmin: User = {
+      id: this.generateId(),
+      email: 'admin@trafiq.ai',
+      name: 'Admin TRAFIQ',
+      password: adminHash,
+      role: 'ADMIN',
+      country: 'France',
+      createdAt: new Date().toISOString(),
+      createdBy: superAdmin.id,
+    };
+
+    this.users = [superAdmin, demoAdmin];
+    await this.saveUsers();
   }
 
   // ── Authentication ──────────────────────────────────────────────────────────
@@ -156,7 +197,7 @@ export class AuthService implements OnModuleInit {
     };
 
     this.users.push(newUser);
-    this.saveUsers();
+    await this.saveUsers();
     this.logger.log(`Created ADMIN: ${newUser.email} → ${newUser.country}`);
 
     return this.stripPassword(newUser);
@@ -185,13 +226,13 @@ export class AuthService implements OnModuleInit {
       user.password = await bcrypt.hash(dto.password, SALT_ROUNDS);
     }
 
-    this.saveUsers();
+    await this.saveUsers();
     this.logger.log(`Updated ADMIN: ${user.email}`);
 
     return this.stripPassword(user);
   }
 
-  deleteAdmin(id: string): { deleted: boolean } {
+  async deleteAdmin(id: string): Promise<{ deleted: boolean }> {
     const user = this.users.find((u) => u.id === id);
     if (!user) throw new NotFoundException(`Admin ${id} not found`);
 
@@ -200,14 +241,34 @@ export class AuthService implements OnModuleInit {
     }
 
     this.users = this.users.filter((u) => u.id !== id);
-    this.saveUsers();
+    await this.saveUsers();
     this.logger.log(`Deleted ADMIN: ${user.email}`);
     return { deleted: true };
   }
 
   // ── File I/O ────────────────────────────────────────────────────────────────
 
-  private loadUsers(): void {
+  private async loadUsers(): Promise<void> {
+    if (this.mongoPrimary.isPrimaryEnabled()) {
+      try {
+        this.users = await this.mongoPrimary.findUsers();
+        if (this.users.length > 0) {
+          this.logger.log(`Loaded ${this.users.length} user(s) from MongoDB`);
+          return;
+        }
+        if (process.env.NODE_ENV === 'production') {
+          this.logger.warn(
+            'MongoDB users collection is empty in production. Skipping JSON user fallback.',
+          );
+          return;
+        }
+      } catch (error) {
+        this.logger.warn(
+          `Mongo users read failed, using JSON: ${this.errorMessage(error)}`,
+        );
+      }
+    }
+
     try {
       const dir = path.dirname(this.usersFile);
       if (!fs.existsSync(dir)) {
@@ -229,7 +290,20 @@ export class AuthService implements OnModuleInit {
     }
   }
 
-  private saveUsers(): void {
+  private async saveUsers(): Promise<void> {
+    if (this.mongoPrimary.isPrimaryEnabled()) {
+      try {
+        await Promise.all(
+          this.users.map((user) => this.mongoPrimary.upsertUser(user)),
+        );
+        return;
+      } catch (error) {
+        this.logger.warn(
+          `Mongo users write failed, using JSON: ${this.errorMessage(error)}`,
+        );
+      }
+    }
+
     try {
       const dir = path.dirname(this.usersFile);
       if (!fs.existsSync(dir)) {
@@ -253,5 +327,9 @@ export class AuthService implements OnModuleInit {
     const { password, ...rest } = user;
     void password;
     return rest;
+  }
+
+  private errorMessage(error: unknown): string {
+    return error instanceof Error ? error.message : String(error);
   }
 }

@@ -43,33 +43,58 @@ export const publicApi = {
     return res.json();
   },
 
-  async updatePosition(sessionId, lat, lng, heading, speed, accuracy) {
+  async updatePosition(
+    sessionId,
+    lat,
+    lng,
+    heading,
+    speed,
+    accuracy,
+    sessionToken,
+  ) {
     const res = await fetch(
       `${API_BASE_URL}/public/navigation/${sessionId}/position`,
       {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ lat, lng, heading, speed, accuracy }),
-      }
+        body: JSON.stringify({
+          lat,
+          lng,
+          heading,
+          speed,
+          accuracy,
+          sessionToken,
+        }),
+      },
     );
+    if (!res.ok)
+      throw new Error(
+        `PATCH /public/navigation/${sessionId}/position failed: ${res.status}`,
+      );
     return res.json();
   },
 
   async getSessionAlerts(sessionId) {
     const res = await fetch(
-      `${API_BASE_URL}/public/navigation/${sessionId}/alerts`
+      `${API_BASE_URL}/public/navigation/${sessionId}/alerts`,
     );
     if (!res.ok)
       throw new Error(
-        `GET /public/navigation/${sessionId}/alerts failed: ${res.status}`
+        `GET /public/navigation/${sessionId}/alerts failed: ${res.status}`,
       );
     return res.json();
   },
 
-  async endNavigation(sessionId) {
+  async endNavigation(sessionId, sessionToken) {
     const res = await fetch(`${API_BASE_URL}/public/navigation/${sessionId}`, {
       method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionToken }),
     });
+    if (!res.ok)
+      throw new Error(
+        `DELETE /public/navigation/${sessionId} failed: ${res.status}`,
+      );
     return res.json();
   },
 };

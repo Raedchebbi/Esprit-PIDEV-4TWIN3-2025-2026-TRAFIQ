@@ -1,6 +1,7 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import * as fs from 'fs';
 import * as path from 'path';
+import { MongoPrimaryRepository } from '../mongodb/mongo-primary.repository';
 
 export interface CameraEntry {
   id: string;
@@ -23,11 +24,28 @@ export class CamerasService implements OnModuleInit {
     '../ai-engine/cameras.json',
   );
 
-  onModuleInit() {
-    this.loadConfig();
+  constructor(private readonly mongoPrimary: MongoPrimaryRepository) {}
+
+  async onModuleInit() {
+    await this.loadConfig();
   }
 
-  private loadConfig() {
+  private async loadConfig() {
+    if (this.mongoPrimary.isPrimaryEnabled()) {
+      try {
+        const cameras = await this.mongoPrimary.findCameras();
+        if (cameras.length > 0) {
+          this.cameras = cameras.filter(
+            (c: CameraEntry) => c.enabled !== false,
+          );
+          return;
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        this.logger.warn(`Mongo cameras read failed, using JSON: ${message}`);
+      }
+    }
+
     try {
       const raw = fs.readFileSync(this.configPath, 'utf-8');
       const parsed: unknown = JSON.parse(raw);
@@ -48,13 +66,11 @@ export class CamerasService implements OnModuleInit {
 
   findAll(): CameraEntry[] {
     // Re-read on every request so changes to cameras.json are picked up without restart
-    this.loadConfig();
     return this.cameras;
   }
 
   /** Return only cameras whose `area` matches the given country. */
   findByCountry(country: string): CameraEntry[] {
-    this.loadConfig();
     return this.cameras.filter(
       (c) => c.area?.toLowerCase() === country.toLowerCase(),
     );

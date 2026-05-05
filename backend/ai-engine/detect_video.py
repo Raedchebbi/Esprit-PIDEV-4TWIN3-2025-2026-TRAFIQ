@@ -163,8 +163,10 @@ MIN_INCIDENT_CONF      = float(os.environ.get("MIN_INCIDENT_CONF", "0.55"))
 RISK_FRAME_INTERVAL    = int(os.environ.get("RISK_FRAME_INTERVAL", "60"))
 ENABLE_RISK_ASSESSMENT = os.environ.get("ENABLE_RISK_ASSESSMENT", "true").lower() == "true"
 NESTJS_URL             = os.environ.get("NESTJS_URL", "http://localhost:3000")
+AI_WS_TOKEN            = os.environ.get("AI_WS_TOKEN")
 INCIDENTS_FILE         = os.path.join(BASE_DIR, "incidents.jsonl")
 VEHICLE_COUNTS_FILE    = os.path.join(BASE_DIR, "vehicle_counts.json")
+AI_HEALTH_FILE         = os.environ.get("AI_HEALTH_FILE", "/tmp/trafiq-ai-ready")
 GROQ_API_KEY           = os.environ.get("GROQ_API_KEY")
 MAX_RECONNECT_ATTEMPTS = int(os.environ.get("MAX_RECONNECT_ATTEMPTS", "10"))
 SHOW_DISPLAY           = os.environ.get("SHOW_DISPLAY", "false").lower() == "true"
@@ -214,7 +216,15 @@ def connect_error(data):
 
 def connect_to_nestjs() -> bool:
     try:
-        sio.connect(NESTJS_URL, wait_timeout=5)
+        if not AI_WS_TOKEN:
+            logger.warning(
+                "AI_WS_TOKEN is not set. Backend production mode will reject AI producer events."
+            )
+        sio.connect(
+            NESTJS_URL,
+            wait_timeout=5,
+            auth={"token": AI_WS_TOKEN} if AI_WS_TOKEN else None,
+        )
         return True
     except Exception as exc:
         logger.warning(
@@ -1121,6 +1131,15 @@ def init_cameras(sources: list) -> list[CameraState]:
     return states
 
 
+def write_health_ready() -> None:
+    """Best-effort readiness marker for Docker/Kubernetes probes."""
+    try:
+        with open(AI_HEALTH_FILE, "w", encoding="utf-8") as fh:
+            fh.write(datetime.datetime.now().isoformat())
+    except OSError as exc:
+        logger.warning("Could not write AI health file %s: %s", AI_HEALTH_FILE, exc)
+
+
 # ── Main Loop ──────────────────────────────────────────────────────────────────
 
 def main() -> None:
@@ -1134,6 +1153,7 @@ def main() -> None:
 
     connect_to_nestjs()
     camera_states = init_cameras(CAMERA_SOURCES)
+    write_health_ready()
 
     # Start Groq background thread — Groq calls never block the video loop
     _groq_thread = threading.Thread(target=_groq_worker, daemon=True, name="groq-worker")

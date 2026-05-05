@@ -41,21 +41,21 @@ export class AccidentsController {
   }
 
   @Get()
-  findAll(@Request() req: { user: RequestUser }) {
+  async findAll(@Request() req: { user: RequestUser }) {
     const cameraIds = this.getAllowedCameraIds(req.user);
     if (cameraIds === null) return this.accidentsService.findAll();
     return this.accidentsService.findAllByCountry(cameraIds);
   }
 
   @Get('active')
-  findActive(@Request() req: { user: RequestUser }) {
+  async findActive(@Request() req: { user: RequestUser }) {
     const cameraIds = this.getAllowedCameraIds(req.user);
     if (cameraIds === null) return this.accidentsService.findActive();
     return this.accidentsService.findActiveByCountry(cameraIds);
   }
 
   @Patch('flag')
-  flagFalsePositives(
+  async flagFalsePositives(
     @Body() body: { ids: string[] },
     @Request() req: { user: RequestUser },
   ) {
@@ -65,13 +65,16 @@ export class AccidentsController {
     const cameraIds = this.getAllowedCameraIds(req.user);
     const count =
       cameraIds === null
-        ? this.accidentsService.flagFalsePositives(body.ids)
-        : this.accidentsService.flagFalsePositivesScoped(body.ids, cameraIds);
+        ? await this.accidentsService.flagFalsePositives(body.ids)
+        : await this.accidentsService.flagFalsePositivesScoped(
+            body.ids,
+            cameraIds,
+          );
     return { flagged: count };
   }
 
   @Patch('unflag')
-  unflagFalsePositives(
+  async unflagFalsePositives(
     @Body() body: { ids: string[] },
     @Request() req: { user: RequestUser },
   ) {
@@ -81,13 +84,16 @@ export class AccidentsController {
     const cameraIds = this.getAllowedCameraIds(req.user);
     const count =
       cameraIds === null
-        ? this.accidentsService.unflagFalsePositives(body.ids)
-        : this.accidentsService.unflagFalsePositivesScoped(body.ids, cameraIds);
+        ? await this.accidentsService.unflagFalsePositives(body.ids)
+        : await this.accidentsService.unflagFalsePositivesScoped(
+            body.ids,
+            cameraIds,
+          );
     return { unflagged: count };
   }
 
   @Delete('remove')
-  removeIncidents(
+  async removeIncidents(
     @Body() body: { ids: string[] },
     @Request() req: { user: RequestUser },
   ) {
@@ -97,8 +103,11 @@ export class AccidentsController {
     const cameraIds = this.getAllowedCameraIds(req.user);
     const count =
       cameraIds === null
-        ? this.accidentsService.removeIncidents(body.ids)
-        : this.accidentsService.removeIncidentsScoped(body.ids, cameraIds);
+        ? await this.accidentsService.removeIncidents(body.ids)
+        : await this.accidentsService.removeIncidentsScoped(
+            body.ids,
+            cameraIds,
+          );
     return { removed: count };
   }
 

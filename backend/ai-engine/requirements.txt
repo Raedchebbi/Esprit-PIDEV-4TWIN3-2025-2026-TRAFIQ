@@ -2,7 +2,10 @@
 # Install with: pip install -r requirements.txt
 
 # Computer vision & YOLO
-opencv-python>=4.9.0
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.3.1+cpu
+torchvision==0.18.1+cpu
+opencv-python-headless>=4.9.0
 ultralytics>=8.1.0
 
 # Image processing (composite frame tiling for Groq)

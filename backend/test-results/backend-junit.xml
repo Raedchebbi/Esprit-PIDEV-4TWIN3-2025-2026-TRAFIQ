@@ -1,35 +1,87 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuites name="jest tests" tests="10" failures="0" errors="0" time="4.055">
-  <testsuite name="MetricsService" errors="0" failures="0" skipped="0" timestamp="2026-04-28T18:59:58" time="2.415" tests="2">
-    <testcase classname="MetricsService records request counters and durations in the Prometheus registry" name="MetricsService records request counters and durations in the Prometheus registry" time="0.128">
+<testsuites name="jest tests" tests="29" failures="0" errors="0" time="7.989">
+  <testsuite name="RiskGateway AI producer authentication" errors="0" failures="0" skipped="0" timestamp="2026-05-05T16:19:55" time="2.136" tests="5">
+    <testcase classname="RiskGateway AI producer authentication accepts authorized AI producer events" name="RiskGateway AI producer authentication accepts authorized AI producer events" time="0.006">
     </testcase>
-    <testcase classname="MetricsService exposes the Prometheus content type for the metrics endpoint" name="MetricsService exposes the Prometheus content type for the metrics endpoint" time="0.018">
+    <testcase classname="RiskGateway AI producer authentication rejects missing tokens" name="RiskGateway AI producer authentication rejects missing tokens" time="0.003">
     </testcase>
-  </testsuite>
-  <testsuite name="AccidentsService" errors="0" failures="0" skipped="0" timestamp="2026-04-28T18:59:58" time="2.679" tests="1">
-    <testcase classname="AccidentsService should be defined" name="AccidentsService should be defined" time="0.101">
+    <testcase classname="RiskGateway AI producer authentication rejects invalid tokens" name="RiskGateway AI producer authentication rejects invalid tokens" time="0.006">
     </testcase>
-  </testsuite>
-  <testsuite name="AppController" errors="0" failures="0" skipped="0" timestamp="2026-04-28T18:59:58" time="2.753" tests="2">
-    <testcase classname="AppController root should return &quot;Hello World!&quot;" name="AppController root should return &quot;Hello World!&quot;" time="0.061">
+    <testcase classname="RiskGateway AI producer authentication rejects malformed payloads from authorized producers" name="RiskGateway AI producer authentication rejects malformed payloads from authorized producers" time="0.002">
     </testcase>
-    <testcase classname="AppController health should expose a kubernetes-friendly health payload" name="AppController health should expose a kubernetes-friendly health payload" time="0.015">
+    <testcase classname="RiskGateway AI producer authentication normalizes incident payloads and derives incident_id when missing" name="RiskGateway AI producer authentication normalizes incident payloads and derives incident_id when missing" time="0.003">
     </testcase>
   </testsuite>
-  <testsuite name="NavigationService" errors="0" failures="0" skipped="0" timestamp="2026-04-28T18:59:58" time="2.922" tests="2">
-    <testcase classname="NavigationService returns scoped accident and congestion alerts for an active session" name="NavigationService returns scoped accident and congestion alerts for an active session" time="0.014">
+  <testsuite name="CentralSessionService" errors="0" failures="0" skipped="0" timestamp="2026-05-05T16:19:57" time="0.517" tests="5">
+    <testcase classname="CentralSessionService is disabled unless USE_CENTRAL_SESSIONS is true" name="CentralSessionService is disabled unless USE_CENTRAL_SESSIONS is true" time="0.003">
     </testcase>
-    <testcase classname="NavigationService marks nearby incidents as relevant for subscribed sessions" name="NavigationService marks nearby incidents as relevant for subscribed sessions" time="0.004">
+    <testcase classname="CentralSessionService creates memory-backed central sessions without Redis" name="CentralSessionService creates memory-backed central sessions without Redis" time="0.002">
+    </testcase>
+    <testcase classname="CentralSessionService rejects missing tokens in central session mode" name="CentralSessionService rejects missing tokens in central session mode" time="0.012">
+    </testcase>
+    <testcase classname="CentralSessionService rejects invalid tokens in central session mode" name="CentralSessionService rejects invalid tokens in central session mode" time="0.001">
+    </testcase>
+    <testcase classname="CentralSessionService accepts valid tokens in central session mode" name="CentralSessionService accepts valid tokens in central session mode" time="0.002">
     </testcase>
   </testsuite>
-  <testsuite name="PublicApiService" errors="0" failures="0" skipped="0" timestamp="2026-04-28T18:59:58" time="2.937" tests="2">
-    <testcase classname="PublicApiService enriches public incidents with camera coordinates" name="PublicApiService enriches public incidents with camera coordinates" time="0.011">
-    </testcase>
-    <testcase classname="PublicApiService returns AI-labelled route suggestions for the planner" name="PublicApiService returns AI-labelled route suggestions for the planner" time="0.005">
+  <testsuite name="AccidentsController" errors="0" failures="0" skipped="0" timestamp="2026-05-05T16:19:58" time="0.477" tests="1">
+    <testcase classname="AccidentsController should be defined" name="AccidentsController should be defined" time="0.019">
     </testcase>
   </testsuite>
-  <testsuite name="AccidentsController" errors="0" failures="0" skipped="0" timestamp="2026-04-28T18:59:58" time="3.084" tests="1">
-    <testcase classname="AccidentsController should be defined" name="AccidentsController should be defined" time="0.027">
+  <testsuite name="AuthService production seeding" errors="0" failures="0" skipped="0" timestamp="2026-05-05T16:19:59" time="0.613" tests="2">
+    <testcase classname="AuthService production seeding does not seed hardcoded defaults in production when initial admin env is missing" name="AuthService production seeding does not seed hardcoded defaults in production when initial admin env is missing" time="0.024">
+    </testcase>
+    <testcase classname="AuthService production seeding seeds initial production super admin from environment" name="AuthService production seeding seeds initial production super admin from environment" time="0.092">
+    </testcase>
+  </testsuite>
+  <testsuite name="NavigationService" errors="0" failures="0" skipped="0" timestamp="2026-05-05T16:19:59" time="0.725" tests="3">
+    <testcase classname="NavigationService returns scoped accident and congestion alerts for an active session" name="NavigationService returns scoped accident and congestion alerts for an active session" time="0.008">
+    </testcase>
+    <testcase classname="NavigationService marks nearby incidents as relevant for subscribed sessions" name="NavigationService marks nearby incidents as relevant for subscribed sessions" time="0.002">
+    </testcase>
+    <testcase classname="NavigationService keeps legacy mode tokenless when central sessions are disabled" name="NavigationService keeps legacy mode tokenless when central sessions are disabled" time="0.001">
+    </testcase>
+  </testsuite>
+  <testsuite name="AccidentsService" errors="0" failures="0" skipped="0" timestamp="2026-05-05T16:20:00" time="0.544" tests="1">
+    <testcase classname="AccidentsService should be defined" name="AccidentsService should be defined" time="0.012">
+    </testcase>
+  </testsuite>
+  <testsuite name="MetricsService" errors="0" failures="0" skipped="0" timestamp="2026-05-05T16:20:00" time="0.407" tests="2">
+    <testcase classname="MetricsService records request counters and durations in the Prometheus registry" name="MetricsService records request counters and durations in the Prometheus registry" time="0.024">
+    </testcase>
+    <testcase classname="MetricsService exposes the Prometheus content type for the metrics endpoint" name="MetricsService exposes the Prometheus content type for the metrics endpoint" time="0.005">
+    </testcase>
+  </testsuite>
+  <testsuite name="MongoPrimaryRepository" errors="0" failures="0" skipped="0" timestamp="2026-05-05T16:20:01" time="0.371" tests="2">
+    <testcase classname="MongoPrimaryRepository is disabled unless MongoDB is connected and USE_MONGO_AS_PRIMARY is true" name="MongoPrimaryRepository is disabled unless MongoDB is connected and USE_MONGO_AS_PRIMARY is true" time="0.002">
+    </testcase>
+    <testcase classname="MongoPrimaryRepository is enabled only when MongoDB is connected and flag is true" name="MongoPrimaryRepository is enabled only when MongoDB is connected and flag is true" time="0">
+    </testcase>
+  </testsuite>
+  <testsuite name="PublicApiService" errors="0" failures="0" skipped="0" timestamp="2026-05-05T16:20:01" time="0.447" tests="2">
+    <testcase classname="PublicApiService enriches public incidents with camera coordinates" name="PublicApiService enriches public incidents with camera coordinates" time="0.003">
+    </testcase>
+    <testcase classname="PublicApiService returns AI-labelled route suggestions for the planner" name="PublicApiService returns AI-labelled route suggestions for the planner" time="0.002">
+    </testcase>
+  </testsuite>
+  <testsuite name="RedisIoAdapter" errors="0" failures="0" skipped="0" timestamp="2026-05-05T16:20:02" time="0.426" tests="2">
+    <testcase classname="RedisIoAdapter does not fail startup when Redis is disabled" name="RedisIoAdapter does not fail startup when Redis is disabled" time="0.004">
+    </testcase>
+    <testcase classname="RedisIoAdapter falls back to local adapter when Redis connection fails" name="RedisIoAdapter falls back to local adapter when Redis connection fails" time="0.003">
+    </testcase>
+  </testsuite>
+  <testsuite name="RateLimitGuard" errors="0" failures="0" skipped="0" timestamp="2026-05-05T16:20:02" time="0.324" tests="1">
+    <testcase classname="RateLimitGuard rate limits after configured threshold" name="RateLimitGuard rate limits after configured threshold" time="0.016">
+    </testcase>
+  </testsuite>
+  <testsuite name="AppController" errors="0" failures="0" skipped="0" timestamp="2026-05-05T16:20:03" time="0.282" tests="2">
+    <testcase classname="AppController root should return &quot;Hello World!&quot;" name="AppController root should return &quot;Hello World!&quot;" time="0.011">
+    </testcase>
+    <testcase classname="AppController health should expose a kubernetes-friendly health payload" name="AppController health should expose a kubernetes-friendly health payload" time="0.004">
+    </testcase>
+  </testsuite>
+  <testsuite name="WsRateLimiter" errors="0" failures="0" skipped="0" timestamp="2026-05-05T16:20:03" time="0.073" tests="1">
+    <testcase classname="WsRateLimiter rejects events after the configured threshold" name="WsRateLimiter rejects events after the configured threshold" time="0.002">
     </testcase>
   </testsuite>
 </testsuites>

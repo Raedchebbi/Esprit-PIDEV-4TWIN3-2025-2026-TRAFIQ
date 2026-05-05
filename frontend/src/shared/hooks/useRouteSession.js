@@ -10,6 +10,7 @@ const ALERT_POLL_INTERVAL = 5000; // 5s
 
 export function useRouteSession() {
   const [sessionId, setSessionId] = useState(null);
+  const [sessionToken, setSessionToken] = useState(null);
   const [activeRoute, setActiveRoute] = useState(null);
   const [alerts, setAlerts] = useState([]);
   const [isNavigating, setIsNavigating] = useState(false);
@@ -32,19 +33,24 @@ export function useRouteSession() {
         String(route.id),
         route.coords,
         origin,
-        destination
+        destination,
       );
 
       setSessionId(result.sessionId);
+      setSessionToken(result.sessionToken || null);
       setActiveRoute(route);
       setIsNavigating(true);
       setAlerts([]);
 
       return result.sessionId;
     } catch (err) {
-      console.warn('[useRouteSession] Failed to start navigation:', err.message);
+      console.warn(
+        '[useRouteSession] Failed to start navigation:',
+        err.message,
+      );
       const localId = `local_${Date.now()}`;
       setSessionId(localId);
+      setSessionToken(null);
       setActiveRoute(route);
       setIsNavigating(true);
       return localId;
@@ -55,13 +61,14 @@ export function useRouteSession() {
   const endNavigation = useCallback(async () => {
     if (sessionId && !sessionId.startsWith('local_')) {
       try {
-        await publicApi.endNavigation(sessionId);
+        await publicApi.endNavigation(sessionId, sessionToken);
       } catch {
         // Ignore cleanup errors
       }
     }
 
     setSessionId(null);
+    setSessionToken(null);
     setActiveRoute(null);
     setIsNavigating(false);
     setAlerts([]);
@@ -70,7 +77,7 @@ export function useRouteSession() {
       clearInterval(alertIntervalRef.current);
       alertIntervalRef.current = null;
     }
-  }, [sessionId]);
+  }, [sessionId, sessionToken]);
 
   const updatePosition = useCallback(
     async (position) => {
@@ -84,13 +91,14 @@ export function useRouteSession() {
           position.lng,
           position.heading,
           position.speed,
-          position.accuracy
+          position.accuracy,
+          sessionToken,
         );
       } catch {
         // Silently fail — position updates are best-effort
       }
     },
-    [sessionId]
+    [sessionId, sessionToken],
   );
 
   const pollAlerts = useCallback(async () => {
@@ -131,6 +139,7 @@ export function useRouteSession() {
 
   return {
     sessionId,
+    sessionToken,
     activeRoute,
     alerts,
     isNavigating,

@@ -74,6 +74,12 @@ jobs:
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
           DOCKERHUB_EMAIL: ${{ vars.DOCKERHUB_EMAIL || 'devops@example.com' }}
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          AI_WS_TOKEN: ${{ secrets.AI_WS_TOKEN }}
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}
+          REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
+          INITIAL_SUPER_ADMIN_EMAIL: ${{ secrets.INITIAL_SUPER_ADMIN_EMAIL }}
+          INITIAL_SUPER_ADMIN_PASSWORD: ${{ secrets.INITIAL_SUPER_ADMIN_PASSWORD }}
+          INITIAL_SUPER_ADMIN_NAME: ${{ vars.INITIAL_SUPER_ADMIN_NAME || 'Initial Super Admin' }}
           WORKFLOW_RUN_ID: ${{ github.event.workflow_run.id }}
         run: |
           kubectl create namespace "$KUBE_NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
@@ -84,6 +90,12 @@ jobs:
           kubectl create secret generic trafiq-backend-secrets \
             --namespace "$KUBE_NAMESPACE" \
             --from-literal=JWT_SECRET="$JWT_SECRET" \
+            --from-literal=AI_WS_TOKEN="$AI_WS_TOKEN" \
+            --from-literal=MONGODB_URI="$MONGODB_URI" \
+            --from-literal=REDIS_PASSWORD="$REDIS_PASSWORD" \
+            --from-literal=INITIAL_SUPER_ADMIN_EMAIL="$INITIAL_SUPER_ADMIN_EMAIL" \
+            --from-literal=INITIAL_SUPER_ADMIN_PASSWORD="$INITIAL_SUPER_ADMIN_PASSWORD" \
+            --from-literal=INITIAL_SUPER_ADMIN_NAME="$INITIAL_SUPER_ADMIN_NAME" \
             --dry-run=client -o yaml | kubectl apply -f -
 
           kubectl create secret docker-registry dockerhub-registry \
@@ -94,8 +106,13 @@ jobs:
             --docker-email="$DOCKERHUB_EMAIL" \
             --dry-run=client -o yaml | kubectl apply -f -
 
+          kubectl apply -f k8s/mongodb-deployment.yaml
+          kubectl apply -f k8s/redis-deployment.yaml
           kubectl apply -f k8s/backend-deployment.yaml
           kubectl apply -f k8s/ingress.yaml
+
+          kubectl rollout status deployment/trafiq-mongodb -n "$KUBE_NAMESPACE" --timeout=180s
+          kubectl rollout status deployment/trafiq-redis -n "$KUBE_NAMESPACE" --timeout=180s
 
           kubectl set image deployment/trafiq-backend backend="$BACKEND_IMAGE" -n "$KUBE_NAMESPACE"
 

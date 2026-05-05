@@ -15,6 +15,7 @@ import {
   StartNavigationDto,
   UpdatePositionDto,
 } from './navigation-session.interface';
+import { RateLimit } from '../rate-limit/rate-limit.decorator';
 
 @Controller('public/navigation')
 export class NavigationController {
@@ -25,7 +26,12 @@ export class NavigationController {
    * Start a new navigation session with route data.
    */
   @Post('start')
-  startNavigation(@Body() dto: StartNavigationDto) {
+  @RateLimit({
+    key: 'navigation-start',
+    limit: Number(process.env.RATE_LIMIT_NAV_START_LIMIT ?? 20),
+    ttlMs: Number(process.env.RATE_LIMIT_NAV_START_TTL_MS ?? 60_000),
+  })
+  async startNavigation(@Body() dto: StartNavigationDto) {
     return this.navigationService.startSession(dto);
   }
 
@@ -34,8 +40,16 @@ export class NavigationController {
    * Update the user's current position within a session.
    */
   @Patch(':id/position')
-  updatePosition(@Param('id') id: string, @Body() dto: UpdatePositionDto) {
-    this.navigationService.updatePosition(id, dto);
+  @RateLimit({
+    key: 'navigation-position',
+    limit: Number(process.env.RATE_LIMIT_NAV_UPDATE_LIMIT ?? 120),
+    ttlMs: Number(process.env.RATE_LIMIT_NAV_UPDATE_TTL_MS ?? 60_000),
+  })
+  async updatePosition(
+    @Param('id') id: string,
+    @Body() dto: UpdatePositionDto & { sessionToken?: string },
+  ) {
+    await this.navigationService.updatePosition(id, dto, dto.sessionToken);
     return { ok: true };
   }
 
@@ -45,7 +59,7 @@ export class NavigationController {
    * Only returns alerts on the user's route or within their geo zone.
    */
   @Get(':id/alerts')
-  getAlerts(@Param('id') id: string) {
+  async getAlerts(@Param('id') id: string) {
     return this.navigationService.getAlerts(id);
   }
 
@@ -54,8 +68,16 @@ export class NavigationController {
    * End a navigation session.
    */
   @Delete(':id')
-  endNavigation(@Param('id') id: string) {
-    this.navigationService.endSession(id);
+  @RateLimit({
+    key: 'navigation-end',
+    limit: Number(process.env.RATE_LIMIT_NAV_END_LIMIT ?? 30),
+    ttlMs: Number(process.env.RATE_LIMIT_NAV_END_TTL_MS ?? 60_000),
+  })
+  async endNavigation(
+    @Param('id') id: string,
+    @Body() body?: { sessionToken?: string },
+  ) {
+    await this.navigationService.endSession(id, body?.sessionToken);
     return { ok: true };
   }
 }

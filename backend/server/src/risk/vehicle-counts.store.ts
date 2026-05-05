@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import * as fs from 'fs';
 import * as path from 'path';
+import { MongoPrimaryRepository } from '../mongodb/mongo-primary.repository';
 
 export interface PerCameraCount {
   cam_id: string;
@@ -26,9 +27,22 @@ export class VehicleCountsStore {
     '../ai-engine/vehicle_counts.json',
   );
 
+  constructor(private readonly mongoPrimary: MongoPrimaryRepository) {}
+
   /** Called by the WebSocket gateway when a live event arrives. */
   update(data: VehicleCountsSnapshot): void {
     this.latestSnapshot = data;
+    if (this.mongoPrimary.isPrimaryEnabled()) {
+      void this.mongoPrimary
+        .updateVehicleCounts(data)
+        .catch((error: unknown) => {
+          const message =
+            error instanceof Error ? error.message : String(error);
+          this.logger.warn(
+            `Failed to persist vehicle counts to MongoDB: ${message}`,
+          );
+        });
+    }
   }
 
   /** Read the latest counts from the file written by the AI engine. */
@@ -48,5 +62,24 @@ export class VehicleCountsStore {
       this.logger.warn(`Failed to read vehicle counts: ${err}`);
       return { total: 0, per_camera: [], timestamp: '' };
     }
+  }
+
+  async getLatestAsync(): Promise<VehicleCountsSnapshot> {
+    if (this.latestSnapshot.timestamp) return this.latestSnapshot;
+    if (this.mongoPrimary.isPrimaryEnabled()) {
+      try {
+        const snapshot = await this.mongoPrimary.getLatestVehicleCounts();
+        if (snapshot) {
+          this.latestSnapshot = snapshot;
+          return snapshot;
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        this.logger.warn(
+          `Mongo vehicle counts read failed, using JSON: ${message}`,
+        );
+      }
+    }
+    return this.getLatest();
   }
 }

@@ -15,6 +15,7 @@ import { JwtAuthGuard } from './jwt-auth.guard';
 import { RolesGuard } from './roles.guard';
 import { Roles } from './roles.decorator';
 import { CreateAdminDto, UpdateAdminDto, RequestUser } from './user.interface';
+import { RateLimit } from '../rate-limit/rate-limit.decorator';
 
 @Controller('auth')
 export class AuthController {
@@ -24,6 +25,11 @@ export class AuthController {
 
   /** POST /auth/login — Authenticate and receive JWT + user profile. */
   @Post('login')
+  @RateLimit({
+    key: 'auth-login',
+    limit: Number(process.env.RATE_LIMIT_LOGIN_LIMIT ?? 5),
+    ttlMs: Number(process.env.RATE_LIMIT_LOGIN_TTL_MS ?? 60_000),
+  })
   async login(@Body() body: { email: string; password: string }) {
     return this.authService.login(body.email, body.password);
   }
@@ -70,7 +76,7 @@ export class AuthController {
   @Delete('admins/:id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('SUPER_ADMIN')
-  deleteAdmin(@Param('id') id: string) {
+  async deleteAdmin(@Param('id') id: string) {
     return this.authService.deleteAdmin(id);
   }
 }

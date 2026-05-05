@@ -12,6 +12,8 @@ import { AccidentsService } from '../accidents/accidents.service';
 import { Accident } from '../accidents/accident.schema';
 import { CamerasService, CameraEntry } from '../cameras/cameras.service';
 import { VehicleCountsStore } from '../risk/vehicle-counts.store';
+import { UserSessionService } from '../mongodb/user-session.service';
+import { CentralSessionService } from './central-session.service';
 import {
   NavigationSession,
   NavigationAlert,
@@ -30,6 +32,8 @@ export class NavigationService implements OnModuleDestroy {
     private readonly accidentsService: AccidentsService,
     private readonly camerasService: CamerasService,
     private readonly vehicleCounts: VehicleCountsStore,
+    private readonly userSessionService: UserSessionService,
+    private readonly centralSessionService: CentralSessionService,
   ) {
     // Periodic cleanup of expired sessions
     this.cleanupInterval = setInterval(() => this.cleanupExpired(), 60_000);
@@ -41,7 +45,13 @@ export class NavigationService implements OnModuleDestroy {
    * Start a new navigation session.
    * Returns a unique sessionId for the client to use.
    */
-  startSession(dto: StartNavigationDto): { sessionId: string } {
+  async startSession(
+    dto: StartNavigationDto,
+  ): Promise<{ sessionId: string; sessionToken?: string }> {
+    if (this.centralSessionService.useCentralStore()) {
+      return this.centralSessionService.createSession(dto);
+    }
+
     const sessionId = this.generateSessionId();
     const session: NavigationSession = {
       sessionId,
@@ -55,6 +65,17 @@ export class NavigationService implements OnModuleDestroy {
     };
 
     this.sessions.set(sessionId, session);
+    this.userSessionService.trackSessionStarted({
+      sessionId,
+      lat: dto.origin.lat,
+      lng: dto.origin.lng,
+      route: {
+        routeId: dto.routeId,
+        routeCoords: dto.routeCoords,
+        origin: dto.origin,
+        destination: dto.destination,
+      },
+    });
     this.logger.log(
       `Navigation session started: ${sessionId} (route: ${dto.routeId})`,
     );
@@ -64,7 +85,20 @@ export class NavigationService implements OnModuleDestroy {
   /**
    * Update the user's current position within a session.
    */
-  updatePosition(sessionId: string, dto: UpdatePositionDto): void {
+  async updatePosition(
+    sessionId: string,
+    dto: UpdatePositionDto,
+    sessionToken?: string,
+  ): Promise<void> {
+    if (this.centralSessionService.useCentralStore()) {
+      await this.centralSessionService.updatePosition(
+        sessionId,
+        dto,
+        sessionToken,
+      );
+      return;
+    }
+
     const session = this.sessions.get(sessionId);
     if (!session) {
       throw new NotFoundException(`Session ${sessionId} not found`);
@@ -77,13 +111,35 @@ export class NavigationService implements OnModuleDestroy {
       accuracy: dto.accuracy,
     };
     session.lastUpdate = new Date();
+    this.userSessionService.trackPositionUpdated({
+      sessionId,
+      lat: dto.lat,
+      lng: dto.lng,
+      route: {
+        routeId: session.routeId,
+        routeCoords: session.routeCoords,
+        origin: session.origin,
+        destination: session.destination,
+      },
+      metadata: {
+        heading: dto.heading,
+        speed: dto.speed,
+        accuracy: dto.accuracy,
+      },
+    });
   }
 
   /**
    * End a navigation session and clean up.
    */
-  endSession(sessionId: string): void {
+  async endSession(sessionId: string, sessionToken?: string): Promise<void> {
+    if (this.centralSessionService.useCentralStore()) {
+      await this.centralSessionService.endSession(sessionId, sessionToken);
+      return;
+    }
+
     if (this.sessions.delete(sessionId)) {
+      this.userSessionService.trackSessionEnded(sessionId);
       this.logger.log(`Navigation session ended: ${sessionId}`);
     }
   }
@@ -91,8 +147,18 @@ export class NavigationService implements OnModuleDestroy {
   /**
    * Get a session by ID.
    */
-  getSession(sessionId: string): NavigationSession | undefined {
+  async getSession(sessionId: string): Promise<NavigationSession | undefined> {
+    if (this.centralSessionService.useCentralStore()) {
+      return this.centralSessionService.getSession(sessionId);
+    }
     return this.sessions.get(sessionId);
+  }
+
+  async validateSession(sessionId: string, token?: string): Promise<boolean> {
+    if (this.centralSessionService.useCentralStore()) {
+      return this.centralSessionService.validateSession(sessionId, token);
+    }
+    return this.sessions.has(sessionId);
   }
 
   /**
@@ -114,13 +180,13 @@ export class NavigationService implements OnModuleDestroy {
    *   1. Within 500m of the route polyline (route-scoped), OR
    *   2. Within 1000m of the user's current position (geo-scoped)
    */
-  getAlerts(sessionId: string): NavigationAlert[] {
-    const session = this.sessions.get(sessionId);
+  async getAlerts(sessionId: string): Promise<NavigationAlert[]> {
+    const session = await this.getSession(sessionId);
     if (!session) {
       throw new NotFoundException(`Session ${sessionId} not found`);
     }
 
-    const incidents = this.accidentsService.findActive();
+    const incidents = await this.accidentsService.findActive();
     const cameras = this.camerasService.findAll();
     const cameraMap = new Map<string, CameraEntry>();
     for (const cam of cameras) {
@@ -181,32 +247,37 @@ export class NavigationService implements OnModuleDestroy {
     }
 
     // Add congestion alerts for zones on the route
-    const congestionAlerts = this.getCongestionAlerts(session);
+    const congestionAlerts = await this.getCongestionAlerts(session);
     alerts.push(...congestionAlerts);
 
     return alerts.sort((a, b) => a.distance - b.distance);
   }
 
-  getCongestionAlertsForSession(sessionId: string): NavigationAlert[] {
-    const session = this.sessions.get(sessionId);
+  async getCongestionAlertsForSession(
+    sessionId: string,
+  ): Promise<NavigationAlert[]> {
+    const session = await this.getSession(sessionId);
     if (!session) {
       throw new NotFoundException(`Session ${sessionId} not found`);
     }
 
-    return this.getCongestionAlerts(session).sort(
-      (a, b) => a.distance - b.distance,
-    );
+    const alerts = await this.getCongestionAlerts(session);
+    return alerts.sort((a, b) => a.distance - b.distance);
   }
 
   /**
    * Check if an incident (by camera location) is relevant to a session.
    * Used by the gateway for real-time filtering.
    */
-  isIncidentRelevant(
+  async isIncidentRelevant(
     incidentCameraId: string,
     sessionId: string,
-  ): { relevant: boolean; scope: 'route' | 'geo' | null; distance: number } {
-    const session = this.sessions.get(sessionId);
+  ): Promise<{
+    relevant: boolean;
+    scope: 'route' | 'geo' | null;
+    distance: number;
+  }> {
+    const session = await this.getSession(sessionId);
     if (!session) return { relevant: false, scope: null, distance: Infinity };
 
     const cameras = this.camerasService.findAll();
@@ -241,8 +312,10 @@ export class NavigationService implements OnModuleDestroy {
 
   // ── Private Helpers ───────────────────────────────────────────────────────
 
-  private getCongestionAlerts(session: NavigationSession): NavigationAlert[] {
-    const counts = this.vehicleCounts.getLatest();
+  private async getCongestionAlerts(
+    session: NavigationSession,
+  ): Promise<NavigationAlert[]> {
+    const counts = await this.vehicleCounts.getLatestAsync();
     const cameras = this.camerasService.findAll();
     const cameraMap = new Map<string, CameraEntry>();
     for (const cam of cameras) {

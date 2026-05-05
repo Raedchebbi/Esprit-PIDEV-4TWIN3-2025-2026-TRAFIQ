@@ -30,8 +30,8 @@ export class PublicApiService {
    * Returns active incidents enriched with camera GPS coordinates.
    * Maps camera_id → camera location so the frontend can plot incidents on map.
    */
-  getPublicIncidents(): PublicIncident[] {
-    const incidents = this.accidentsService.findActive();
+  async getPublicIncidents(): Promise<PublicIncident[]> {
+    const incidents = await this.accidentsService.findActive();
     const cameras = this.camerasService.findAll();
     const cameraMap = new Map<string, CameraEntry>();
     for (const cam of cameras) {
@@ -62,8 +62,8 @@ export class PublicApiService {
   /**
    * Returns per-zone congestion data by merging vehicle counts with camera info.
    */
-  getCongestionData(): CongestionZone[] {
-    const counts = this.vehicleCounts.getLatest();
+  async getCongestionData(): Promise<CongestionZone[]> {
+    const counts = await this.vehicleCounts.getLatestAsync();
     const cameras = this.camerasService.findAll();
     const cameraMap = new Map<string, CameraEntry>();
     for (const cam of cameras) {
@@ -104,9 +104,9 @@ export class PublicApiService {
    *   - Average congestion along route (weight: 0.3)
    *   - Total distance (weight: 0.2)
    */
-  suggestRoutes(dto: SuggestRoutesDto): SuggestedRoute[] {
-    const incidents = this.getPublicIncidents();
-    const congestion = this.getCongestionData();
+  async suggestRoutes(dto: SuggestRoutesDto): Promise<SuggestedRoute[]> {
+    const incidents = await this.getPublicIncidents();
+    const congestion = await this.getCongestionData();
 
     // Predefined route templates — mirrors frontend mock data structure.
     // In production, this would query a routing engine (OSRM, Mapbox, etc.)

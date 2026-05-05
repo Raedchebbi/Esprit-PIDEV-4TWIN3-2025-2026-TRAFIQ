@@ -17,12 +17,16 @@ export function RouteSessionProvider({ children }) {
   const { accidentsGPS } = useTrafik();
 
   // Enhanced geolocation with speed/heading
-  const geo = useEnhancedGeolocation({ enableHighAccuracy: true, minDistance: 5 });
+  const geo = useEnhancedGeolocation({
+    enableHighAccuracy: true,
+    minDistance: 5,
+  });
 
   // Route session lifecycle
   const session = useRouteSession();
   const {
     sessionId,
+    sessionToken,
     activeRoute,
     alerts: serverAlerts,
     isNavigating,
@@ -75,7 +79,8 @@ export function RouteSessionProvider({ children }) {
         geo.position.lat,
         geo.position.lng,
         geo.heading,
-        geo.speed
+        geo.speed,
+        sessionToken,
       );
     }
   }, [
@@ -85,15 +90,16 @@ export function RouteSessionProvider({ children }) {
     geo.accuracy,
     isNavigating,
     sessionId,
+    sessionToken,
     updatePosition,
     pushSocketPosition,
   ]);
 
   useEffect(() => {
     if (isNavigating && sessionId) {
-      subscribeToRoute(sessionId);
+      subscribeToRoute(sessionId, sessionToken);
     }
-  }, [isNavigating, sessionId, subscribeToRoute]);
+  }, [isNavigating, sessionId, sessionToken, subscribeToRoute]);
 
   async function startNavigationAndRedirect(route) {
     const newSessionId = await startNavigation(route);
@@ -123,6 +129,7 @@ export function RouteSessionProvider({ children }) {
 
     // Navigation session
     sessionId,
+    sessionToken,
     activeRoute,
     isNavigating,
     startNavigation: startNavigationAndRedirect,
@@ -151,7 +158,7 @@ export function useRouteSessionContext() {
   const ctx = useContext(RouteSessionContext);
   if (!ctx)
     throw new Error(
-      'useRouteSessionContext must be used inside RouteSessionProvider'
+      'useRouteSessionContext must be used inside RouteSessionProvider',
     );
   return ctx;
 }

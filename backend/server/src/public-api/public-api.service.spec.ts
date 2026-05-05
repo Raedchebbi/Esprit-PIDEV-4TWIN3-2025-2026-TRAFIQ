@@ -14,7 +14,8 @@ describe('PublicApiService', () => {
 
   const vehicleCounts = {
     getLatest: jest.fn(),
-  } as unknown as Pick<VehicleCountsStore, 'getLatest'>;
+    getLatestAsync: jest.fn(),
+  } as unknown as Pick<VehicleCountsStore, 'getLatest' | 'getLatestAsync'>;
 
   let service: PublicApiService;
 
@@ -22,6 +23,7 @@ describe('PublicApiService', () => {
     jest.mocked(accidentsService.findActive).mockReset();
     jest.mocked(camerasService.findAll).mockReset();
     jest.mocked(vehicleCounts.getLatest).mockReset();
+    jest.mocked(vehicleCounts.getLatestAsync).mockReset();
 
     jest.mocked(camerasService.findAll).mockReturnValue([
       {
@@ -41,8 +43,8 @@ describe('PublicApiService', () => {
     );
   });
 
-  it('enriches public incidents with camera coordinates', () => {
-    jest.mocked(accidentsService.findActive).mockReturnValue([
+  it('enriches public incidents with camera coordinates', async () => {
+    jest.mocked(accidentsService.findActive).mockResolvedValue([
       {
         incident_id: 'inc_1',
         incident_type: 'vehicle_collision',
@@ -55,7 +57,7 @@ describe('PublicApiService', () => {
       },
     ]);
 
-    const incidents = service.getPublicIncidents();
+    const incidents = await service.getPublicIncidents();
 
     expect(incidents).toHaveLength(1);
     expect(incidents[0]).toMatchObject({
@@ -68,15 +70,15 @@ describe('PublicApiService', () => {
     });
   });
 
-  it('returns AI-labelled route suggestions for the planner', () => {
-    jest.mocked(accidentsService.findActive).mockReturnValue([]);
-    jest.mocked(vehicleCounts.getLatest).mockReturnValue({
+  it('returns AI-labelled route suggestions for the planner', async () => {
+    jest.mocked(accidentsService.findActive).mockResolvedValue([]);
+    jest.mocked(vehicleCounts.getLatestAsync).mockResolvedValue({
       total: 0,
       per_camera: [],
       timestamp: '2026-04-26T12:00:00.000Z',
     });
 
-    const routes = service.suggestRoutes({
+    const routes = await service.suggestRoutes({
       originLat: 36.8068,
       originLng: 10.1816,
       destLat: 36.809,

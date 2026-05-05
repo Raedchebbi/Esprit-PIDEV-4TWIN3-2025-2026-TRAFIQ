@@ -5,6 +5,7 @@
 import { Controller, Get, Post, Body } from '@nestjs/common';
 import { PublicApiService } from './public-api.service';
 import { SuggestRoutesDto } from '../navigation/navigation-session.interface';
+import { RateLimit } from '../rate-limit/rate-limit.decorator';
 
 @Controller('public')
 export class PublicApiController {
@@ -15,7 +16,7 @@ export class PublicApiController {
    * Returns active incidents enriched with camera GPS coordinates.
    */
   @Get('incidents')
-  getPublicIncidents() {
+  async getPublicIncidents() {
     return this.publicApiService.getPublicIncidents();
   }
 
@@ -24,7 +25,7 @@ export class PublicApiController {
    * Returns per-zone congestion data from live vehicle counts.
    */
   @Get('congestion')
-  getCongestionData() {
+  async getCongestionData() {
     return this.publicApiService.getCongestionData();
   }
 
@@ -34,7 +35,12 @@ export class PublicApiController {
    * Body: { originLat, originLng, destLat, destLng }
    */
   @Post('routes/suggest')
-  suggestRoutes(@Body() dto: SuggestRoutesDto) {
+  @RateLimit({
+    key: 'public-route-suggest',
+    limit: Number(process.env.RATE_LIMIT_PUBLIC_ROUTE_LIMIT ?? 60),
+    ttlMs: Number(process.env.RATE_LIMIT_PUBLIC_ROUTE_TTL_MS ?? 60_000),
+  })
+  async suggestRoutes(@Body() dto: SuggestRoutesDto) {
     return this.publicApiService.suggestRoutes(dto);
   }
 }
