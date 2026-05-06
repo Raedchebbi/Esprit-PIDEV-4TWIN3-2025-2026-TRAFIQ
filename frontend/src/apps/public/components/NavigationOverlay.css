@@ -114,6 +114,9 @@
 }
 
 .nav-overlay__route-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-size: 0.72rem;
   color: var(--pub-text-secondary);
 }
@@ -135,8 +138,7 @@
 }
 
 .nav-overlay__alert-icon {
-  font-size: 0.8rem;
-  line-height: 1;
+  flex-shrink: 0;
 }
 
 .nav-overlay__alert-count {
@@ -164,8 +166,7 @@
 }
 
 .nav-overlay__stat-icon {
-  font-size: 1rem;
-  line-height: 1;
+  flex-shrink: 0;
 }
 
 .nav-overlay__stat-content {
@@ -208,7 +209,6 @@
 }
 
 .nav-overlay__guidance-icon {
-  font-size: 1.2rem;
   flex-shrink: 0;
 }
 

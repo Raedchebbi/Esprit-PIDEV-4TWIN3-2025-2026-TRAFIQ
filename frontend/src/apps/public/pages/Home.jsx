@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Circle, MapPinned } from 'lucide-react';
 import PublicMap from '../components/PublicMap';
 import { useTrafik } from '../../../shared/context/TrafikContext';
 import { useRouteSessionContext } from '../../../shared/context/RouteSessionContext';
@@ -6,9 +7,9 @@ import { Link } from 'react-router-dom';
 import './Home.css';
 
 const statusStyle = {
-    free: { icon: '🟢', label: 'Fluide', color: '#2E7D32' },
-    slow: { icon: '🟡', label: 'Dense', color: '#F57C00' },
-    blocked: { icon: '🔴', label: 'BLOQUÉE', color: '#B71C1C' },
+    free: { label: 'Fluide', color: '#2E7D32' },
+    slow: { label: 'Dense', color: '#F57C00' },
+    blocked: { label: 'BLOQUÉE', color: '#B71C1C' },
 };
 
 export default function Home() {
@@ -45,7 +46,14 @@ export default function Home() {
                 const s = statusStyle[route.status] || statusStyle.slow;
                 return (
                   <div key={route.id} className="home-route-row">
-                    <span className="home-route-icon">{s.icon}</span>
+                    <Circle
+                      className="home-route-icon"
+                      size={14}
+                      fill={s.color}
+                      color={s.color}
+                      strokeWidth={0}
+                      aria-hidden="true"
+                    />
                     <span className="home-route-name">{route.name}</span>
                     <span
                       className="home-route-status"
@@ -67,9 +75,13 @@ export default function Home() {
                   </div>
                 );
               })}
+              {panelRoutes.length === 0 && (
+                <div className="home-route-empty">Aucune donnée trafic disponible.</div>
+              )}
             </div>
             <Link to="/plan" className="home-plan-btn">
-              🗺️ Planifier mon itinéraire →
+              <MapPinned size={16} aria-hidden="true" />
+              Planifier mon itinéraire →
             </Link>
           </>
         )}

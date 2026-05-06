@@ -14,6 +14,31 @@ import {
   SuggestRoutesDto,
 } from '../navigation/navigation-session.interface';
 
+interface RouteTemplate {
+  roads: string[];
+  time: number;
+  dist: number;
+  coords: [number, number][];
+}
+
+interface RoutingResponse {
+  code?: string;
+  routes?: RoutingRoute[];
+}
+
+interface RoutingRoute {
+  distance: number;
+  duration: number;
+  geometry?: {
+    coordinates?: [number, number][];
+  };
+  legs?: Array<{
+    steps?: Array<{
+      name?: string;
+    }>;
+  }>;
+}
+
 @Injectable()
 export class PublicApiService {
   private readonly logger = new Logger(PublicApiService.name);
@@ -110,7 +135,7 @@ export class PublicApiService {
 
     // Predefined route templates — mirrors frontend mock data structure.
     // In production, this would query a routing engine (OSRM, Mapbox, etc.)
-    const routeTemplates = this.getRouteTemplates(dto);
+    const routeTemplates = await this.getRouteTemplates(dto);
 
     return routeTemplates
       .map((route, idx) => {
@@ -174,7 +199,6 @@ export class PublicApiService {
         const congestionLevel = this.computeCongestionLevel(avgCongestion);
 
         return {
-          id: idx + 1,
           label,
           aiLabel,
           labelColor,
@@ -184,22 +208,27 @@ export class PublicApiService {
           dist: route.dist,
           status,
           incidents: nearbyIncidents.length,
+          activeIncidents: nearbyIncidents,
           riskScore: Math.round(riskScore * 100) / 100,
           congestionLevel,
           coords: route.coords,
-          color:
-            riskScore < 0.3
-              ? '#1A73E8'
-              : riskScore < 0.6
-                ? '#F57C00'
-                : '#E53935',
-          weight: idx === 0 ? 5 : 3,
-          opacity: idx === 0 ? 0.9 : 0.6,
-          dashArray: idx === 0 ? null : '8,4',
           aiReasoning,
         };
       })
-      .sort((a, b) => a.riskScore - b.riskScore);
+      .sort((a, b) => a.riskScore - b.riskScore)
+      .map((route, idx) => ({
+        ...route,
+        id: idx + 1,
+        color:
+          route.riskScore < 0.3
+            ? '#1A73E8'
+            : route.riskScore < 0.6
+              ? '#F57C00'
+              : '#E53935',
+        weight: idx === 0 ? 5 : 3,
+        opacity: idx === 0 ? 0.9 : 0.6,
+        dashArray: idx === 0 ? null : '8,4',
+      }));
   }
 
   // ── Geo Helpers ───────────────────────────────────────────────────────────
@@ -274,43 +303,208 @@ export class PublicApiService {
    * Route templates — predefined paths used for suggestion.
    * Mirrors the existing ITINERAIRES_MOCK and ROAD_POLYLINES from the frontend.
    */
-  private getRouteTemplates(dto: SuggestRoutesDto) {
+  private async getRouteTemplates(
+    dto: SuggestRoutesDto,
+  ): Promise<RouteTemplate[]> {
+    const fallbackTemplates = this.getFallbackRouteTemplates(dto);
+
+    return Promise.all(
+      fallbackTemplates.map(async (template) => {
+        const routedTemplate = await this.fetchRoadAlignedRoute(template);
+        return routedTemplate ?? template;
+      }),
+    );
+  }
+
+  private getFallbackRouteTemplates(dto: SuggestRoutesDto): RouteTemplate[] {
+    const origin: [number, number] = [dto.originLat, dto.originLng];
+    const destination: [number, number] = [dto.destLat, dto.destLng];
+    const cameras = this.camerasService.findAll();
+
+    const corridorCameras = cameras.filter((camera) =>
+      this.isPointNearPolyline(
+        camera.location.latitude,
+        camera.location.longitude,
+        [origin, destination],
+        25000,
+      ),
+    );
+
+    const relevantCameras =
+      corridorCameras.length > 0
+        ? corridorCameras
+        : cameras
+            .map((camera) => ({
+              camera,
+              distance: Math.min(
+                this.haversine(
+                  dto.originLat,
+                  dto.originLng,
+                  camera.location.latitude,
+                  camera.location.longitude,
+                ),
+                this.haversine(
+                  dto.destLat,
+                  dto.destLng,
+                  camera.location.latitude,
+                  camera.location.longitude,
+                ),
+              ),
+            }))
+            .sort((a, b) => a.distance - b.distance)
+            .slice(0, 3)
+            .map(({ camera }) => camera);
+
+    const midpoints = relevantCameras
+      .slice(0, 3)
+      .map((camera) =>
+        [camera.location.latitude, camera.location.longitude] as [number, number],
+      );
+
+    const areaLabel = relevantCameras[0]?.area ?? 'corridor';
+
     return [
       {
-        roads: ['A1', 'Blvd Mohamed V'],
-        time: 18,
-        dist: 7.2,
-        coords: [
-          [dto.originLat, dto.originLng],
-          [36.808, 10.18],
-          [36.806, 10.183],
-          [dto.destLat, dto.destLng],
-        ] as [number, number][],
+        roads: ['Direct route', `Camera corridor ${areaLabel}`],
+        time: this.estimateTravelTime(origin, destination, 1),
+        dist: this.computePathDistanceKm([origin, ...midpoints, destination]),
+        coords: [origin, ...midpoints, destination],
       },
       {
-        roads: ['Avenue Habib Bourguiba', 'Rue de Marseille'],
-        time: 22,
-        dist: 8.8,
+        roads: ['Northern bypass', `${areaLabel} alternate`],
+        time: this.estimateTravelTime(origin, destination, 1.15),
+        dist: this.computePathDistanceKm([
+          origin,
+          this.offsetWaypoint(origin, destination, 0.33, 0.12),
+          this.offsetWaypoint(origin, destination, 0.66, 0.12),
+          destination,
+        ]),
         coords: [
-          [dto.originLat, dto.originLng],
-          [36.809, 10.177],
-          [36.808, 10.18],
-          [36.807, 10.183],
-          [dto.destLat, dto.destLng],
-        ] as [number, number][],
+          origin,
+          this.offsetWaypoint(origin, destination, 0.33, 0.12),
+          this.offsetWaypoint(origin, destination, 0.66, 0.12),
+          destination,
+        ],
       },
       {
-        roads: ['Rue de la Liberté', 'Avenue de la Foire'],
-        time: 30,
-        dist: 6.1,
+        roads: ['Southern bypass', `${areaLabel} alternate`],
+        time: this.estimateTravelTime(origin, destination, 1.22),
+        dist: this.computePathDistanceKm([
+          origin,
+          this.offsetWaypoint(origin, destination, 0.33, -0.12),
+          this.offsetWaypoint(origin, destination, 0.66, -0.12),
+          destination,
+        ]),
         coords: [
-          [dto.originLat, dto.originLng],
-          [36.811, 10.178],
-          [36.809, 10.182],
-          [36.807, 10.186],
-          [dto.destLat, dto.destLng],
-        ] as [number, number][],
+          origin,
+          this.offsetWaypoint(origin, destination, 0.33, -0.12),
+          this.offsetWaypoint(origin, destination, 0.66, -0.12),
+          destination,
+        ],
       },
+    ];
+  }
+
+  private async fetchRoadAlignedRoute(
+    template: RouteTemplate,
+  ): Promise<RouteTemplate | null> {
+    const routingServiceUrl = (
+      process.env.ROUTING_SERVICE_URL ?? 'https://router.project-osrm.org'
+    ).replace(/\/+$/, '');
+    const routingTimeoutMs = Number(process.env.ROUTING_TIMEOUT_MS ?? 5000);
+    const encodedWaypoints = template.coords
+      .map(([lat, lng]) => `${lng},${lat}`)
+      .join(';');
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), routingTimeoutMs);
+
+    try {
+      const response = await fetch(
+        `${routingServiceUrl}/route/v1/driving/${encodedWaypoints}?overview=full&geometries=geojson&steps=true&alternatives=false&continue_straight=true`,
+        { signal: controller.signal },
+      );
+
+      if (!response.ok) {
+        return null;
+      }
+
+      const payload = (await response.json()) as RoutingResponse;
+      const route = payload.routes?.[0];
+      const geometry = route?.geometry?.coordinates;
+
+      if (payload.code !== 'Ok' || !route || !geometry || geometry.length < 2) {
+        return null;
+      }
+
+      return {
+        roads: this.extractRoadLabels(route, template.roads),
+        time: Math.max(5, Math.round(route.duration / 60)),
+        dist: Math.round((route.distance / 1000) * 10) / 10,
+        coords: geometry.map(([lng, lat]) => [lat, lng] as [number, number]),
+      };
+    } catch {
+      return null;
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  private extractRoadLabels(
+    route: RoutingRoute,
+    fallbackRoads: string[],
+  ): string[] {
+    const names =
+      route.legs?.flatMap(
+        (leg) =>
+          leg.steps
+            ?.map((step) => step.name?.trim())
+            .filter((name): name is string => Boolean(name)) ?? [],
+      ) ?? [];
+    const uniqueNames = Array.from(new Set(names));
+    return uniqueNames.length > 0 ? uniqueNames.slice(0, 3) : fallbackRoads;
+  }
+
+  private estimateTravelTime(
+    origin: [number, number],
+    destination: [number, number],
+    multiplier: number,
+  ): number {
+    const baseDistanceKm = this.haversine(
+      origin[0],
+      origin[1],
+      destination[0],
+      destination[1],
+    ) / 1000;
+    return Math.max(5, Math.round((baseDistanceKm / 0.75) * multiplier));
+  }
+
+  private computePathDistanceKm(coords: [number, number][]): number {
+    let total = 0;
+    for (let i = 0; i < coords.length - 1; i++) {
+      total += this.haversine(
+        coords[i][0],
+        coords[i][1],
+        coords[i + 1][0],
+        coords[i + 1][1],
+      );
+    }
+    return Math.round((total / 1000) * 10) / 10;
+  }
+
+  private offsetWaypoint(
+    origin: [number, number],
+    destination: [number, number],
+    progress: number,
+    lateralOffsetRatio: number,
+  ): [number, number] {
+    const dx = destination[0] - origin[0];
+    const dy = destination[1] - origin[1];
+    const baseLat = origin[0] + dx * progress;
+    const baseLng = origin[1] + dy * progress;
+
+    return [
+      baseLat - dy * lateralOffsetRatio,
+      baseLng + dx * lateralOffsetRatio,
     ];
   }
 }

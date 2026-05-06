@@ -23,6 +23,7 @@ Local development behavior is:
 
 - Demo users are seeded only when `NODE_ENV !== production` and `SEED_DEMO_USERS` is not `false`.
 - Set `SEED_DEMO_USERS=false` to disable local demo users.
+- Current local demo users are `super@trafiq.ai` (global), `admin@trafiq.ai` (France), `astrakhan@trafiq.ai` (Astrakhan), and `spain@trafiq.ai` (Spain).
 
 ## HTTP Rate Limits
 

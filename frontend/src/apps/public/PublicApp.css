@@ -76,7 +76,7 @@
 }
 
 .pub-search-icon {
-    font-size: 0.9rem;
+    flex-shrink: 0;
 }
 
 .pub-search-placeholder {

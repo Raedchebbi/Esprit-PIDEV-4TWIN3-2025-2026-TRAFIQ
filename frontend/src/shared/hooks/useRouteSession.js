@@ -14,12 +14,14 @@ export function useRouteSession() {
   const [activeRoute, setActiveRoute] = useState(null);
   const [alerts, setAlerts] = useState([]);
   const [isNavigating, setIsNavigating] = useState(false);
+  const [lastError, setLastError] = useState(null);
 
   const alertIntervalRef = useRef(null);
   const lastPositionRef = useRef(null);
 
   const startNavigation = useCallback(async (route) => {
     try {
+      setLastError(null);
       const origin = {
         lat: route.coords[0][0],
         lng: route.coords[0][1],
@@ -48,18 +50,14 @@ export function useRouteSession() {
         '[useRouteSession] Failed to start navigation:',
         err.message,
       );
-      const localId = `local_${Date.now()}`;
-      setSessionId(localId);
-      setSessionToken(null);
-      setActiveRoute(route);
-      setIsNavigating(true);
-      return localId;
+      setLastError(err instanceof Error ? err.message : 'Navigation unavailable');
+      return null;
     }
   }, []);
 
   // End the navigation session
   const endNavigation = useCallback(async () => {
-    if (sessionId && !sessionId.startsWith('local_')) {
+    if (sessionId) {
       try {
         await publicApi.endNavigation(sessionId, sessionToken);
       } catch {
@@ -72,6 +70,7 @@ export function useRouteSession() {
     setActiveRoute(null);
     setIsNavigating(false);
     setAlerts([]);
+    setLastError(null);
 
     if (alertIntervalRef.current) {
       clearInterval(alertIntervalRef.current);
@@ -81,7 +80,7 @@ export function useRouteSession() {
 
   const updatePosition = useCallback(
     async (position) => {
-      if (!sessionId || sessionId.startsWith('local_')) return;
+      if (!sessionId) return;
       lastPositionRef.current = position;
 
       try {
@@ -102,7 +101,7 @@ export function useRouteSession() {
   );
 
   const pollAlerts = useCallback(async () => {
-    if (!sessionId || sessionId.startsWith('local_')) return;
+    if (!sessionId) return;
 
     try {
       const serverAlerts = await publicApi.getSessionAlerts(sessionId);
@@ -116,7 +115,7 @@ export function useRouteSession() {
 
   // Set up periodic alert polling when navigating
   useEffect(() => {
-    if (isNavigating && sessionId && !sessionId.startsWith('local_')) {
+    if (isNavigating && sessionId) {
       alertIntervalRef.current = setInterval(pollAlerts, ALERT_POLL_INTERVAL);
       const initialPollTimer = setTimeout(() => {
         void pollAlerts();
@@ -143,6 +142,7 @@ export function useRouteSession() {
     activeRoute,
     alerts,
     isNavigating,
+    lastError,
     startNavigation,
     endNavigation,
     updatePosition,

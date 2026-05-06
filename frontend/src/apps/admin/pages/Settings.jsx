@@ -1,4 +1,5 @@
 import React from 'react';
+import { Earth, Flag } from 'lucide-react';
 import { useAuth } from '../../../shared/context/AuthContext';
 import './Settings.css';
 
@@ -42,7 +43,11 @@ export default function Settings() {
                             <div className="adm-set-account-row">
                                 <span className="adm-set-account-label">Portée</span>
                                 <span className="adm-set-account-value">
-                                    {isSuperAdmin ? '🌍 Accès global (tous les pays)' : `🏳 ${user?.country || '—'}`}
+                                    {isSuperAdmin ? (
+                                        <><Earth size={14} aria-hidden="true" /> Accès global (tous les pays)</>
+                                    ) : (
+                                        <><Flag size={14} aria-hidden="true" /> {user?.country || '—'}</>
+                                    )}
                                 </span>
                             </div>
                         </div>

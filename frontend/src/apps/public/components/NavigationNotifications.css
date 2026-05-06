@@ -48,10 +48,9 @@
 
 /* ── Toast Icon ───────────────────────────────────────────── */
 .nav-notif-toast__icon {
-  font-size: 1.3rem;
-  line-height: 1;
   flex-shrink: 0;
   margin-top: 2px;
+  color: var(--toast-color, var(--color-warning));
 }
 
 /* ── Toast Body ───────────────────────────────────────────── */
@@ -137,6 +136,9 @@
 
 /* ── Close Button ─────────────────────────────────────────── */
 .nav-notif-toast__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   background: none;
   border: none;
   cursor: pointer;

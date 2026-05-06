@@ -1,4 +1,5 @@
 import React from 'react';
+import { AlertTriangle, Camera, Download, Search } from 'lucide-react';
 import { useTrafik } from '../../../shared/context/TrafikContext';
 import SnapshotViewer from '../components/SnapshotViewer';
 import './Snapshots.css';
@@ -9,7 +10,7 @@ export default function Snapshots() {
     return (
         <div className="adm-snapshots-page">
             <div className="adm-snapshots-header">
-                <h2>📷 Snapshots des incidents</h2>
+                <h2><Camera size={18} aria-hidden="true" /> Snapshots des incidents</h2>
                 <div className="adm-snapshots-filters">
                     <div className="adm-pill-group">
                         <button className="adm-pill-btn active">Tous</button>
@@ -31,8 +32,8 @@ export default function Snapshots() {
                         </div>
                         <div className="adm-snapshot-info">
                             <div className="adm-snapshot-type-row">
-                                <span className={`adm-badge-type ${acc.severity}`}>[⚠️ {acc.type}]</span>
-                                <span className="adm-badge-lvl">{acc.level} ★★</span>
+                                <span className={`adm-badge-type ${acc.severity}`}><AlertTriangle size={12} aria-hidden="true" /> {acc.type}</span>
+                                <span className="adm-badge-lvl">{acc.level}</span>
                             </div>
                             <div className="adm-snapshot-vehicles">Véhicules {acc.vehicles}</div>
                             <div className="adm-snapshot-metrics">
@@ -40,8 +41,8 @@ export default function Snapshots() {
                             </div>
                             <div className="adm-snapshot-date">15 Jan 2025 — 14:32:05</div>
                             <div className="adm-snapshot-actions">
-                                <button className="adm-btn-small-outline">🔍 Agrandir</button>
-                                <button className="adm-btn-small-outline">📥 Télécharger</button>
+                                <button className="adm-btn-small-outline"><Search size={14} aria-hidden="true" /> Agrandir</button>
+                                <button className="adm-btn-small-outline"><Download size={14} aria-hidden="true" /> Télécharger</button>
                             </div>
                         </div>
                     </div>

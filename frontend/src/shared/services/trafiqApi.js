@@ -30,6 +30,15 @@ export const trafiqApi = {
         if (!res.ok) throw new Error(`GET /accidents/active failed: ${res.status}`);
         return res.json();
     },
+    async getSnapshotUrl(filename) {
+        const res = await fetch(`${API_BASE_URL}/accidents/snapshot/${filename}`, {
+            headers: authHeaders(),
+        });
+        if (!res.ok) throw new Error(`GET /accidents/snapshot/${filename} failed: ${res.status}`);
+
+        const blob = await res.blob();
+        return URL.createObjectURL(blob);
+    },
 
     // ── Vehicle Counts ────────────────────────────────────────────────────────
     async getVehicleCounts() {

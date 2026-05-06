@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Camera, MapPinned, Video } from 'lucide-react';
 import { trafiqApi } from '../../../shared/services/trafiqApi';
 import './LiveMonitoring.css';
 
@@ -127,7 +128,7 @@ function FeedPanel({ feed, onLocate }) {
             <div className="adm-feed-bar">
                 <span className="adm-feed-label">{feed.label}</span>
                 {feed.placeholder ? (
-                    <span className="adm-feed-placeholder-badge">📹 À filmer</span>
+                    <span className="adm-feed-placeholder-badge"><Video size={12} aria-hidden="true" /> À filmer</span>
                 ) : (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <span className="adm-feed-live-badge">● LIVE</span>
@@ -139,7 +140,7 @@ function FeedPanel({ feed, onLocate }) {
                             }}
                             style={{ fontSize: '0.68rem', padding: 0 }}
                         >
-                            🗺 Voir sur la carte
+                            <MapPinned size={12} aria-hidden="true" /> Voir sur la carte
                         </button>
                     </div>
                 )}
@@ -148,7 +149,7 @@ function FeedPanel({ feed, onLocate }) {
             {feed.placeholder ? (
                 // Placeholder for Ariana cameras not yet filmed
                 <div className="adm-feed-placeholder">
-                    <div className="adm-feed-placeholder-icon">📷</div>
+                    <div className="adm-feed-placeholder-icon"><Camera size={28} aria-hidden="true" /></div>
                     <div className="adm-feed-placeholder-text">
                         Caméra {feed.label}
                     </div>

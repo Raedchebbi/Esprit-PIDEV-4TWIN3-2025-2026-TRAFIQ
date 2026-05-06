@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { ChartColumn, Earth, Shield, Video } from 'lucide-react';
 import { useAuth } from '../../../shared/context/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
 import './Login.css';
@@ -38,19 +39,19 @@ export default function AdminLogin() {
 
                     <div className="adm-login-features">
                         <div className="adm-feat-item">
-                            <span className="adm-feat-icon">🛡️</span>
+                            <span className="adm-feat-icon"><Shield size={22} aria-hidden="true" /></span>
                             <div className="adm-feat-text">Surveillance IA 24/7</div>
                         </div>
                         <div className="adm-feat-item">
-                            <span className="adm-feat-icon">📊</span>
+                            <span className="adm-feat-icon"><ChartColumn size={22} aria-hidden="true" /></span>
                             <div className="adm-feat-text">Analytics temps réel</div>
                         </div>
                         <div className="adm-feat-item">
-                            <span className="adm-feat-icon">📹</span>
+                            <span className="adm-feat-icon"><Video size={22} aria-hidden="true" /></span>
                             <div className="adm-feat-text">Monitoring caméras</div>
                         </div>
                         <div className="adm-feat-item">
-                            <span className="adm-feat-icon">🌍</span>
+                            <span className="adm-feat-icon"><Earth size={22} aria-hidden="true" /></span>
                             <div className="adm-feat-text">Multi-pays hiérarchique</div>
                         </div>
                     </div>

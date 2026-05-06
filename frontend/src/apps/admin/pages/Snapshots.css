@@ -11,6 +11,9 @@
 }
 
 .adm-snapshots-header h2 {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
     font-size: 1.25rem;
     font-weight: 800;
 }
@@ -84,6 +87,9 @@
 }
 
 .adm-badge-type {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
     font-size: 0.7rem;
     font-weight: 800;
     font-family: var(--font-mono);
@@ -126,6 +132,10 @@
 }
 
 .adm-btn-small-outline {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
     flex: 1;
     background: #fff;
     border: 1px solid #CFD8DC;

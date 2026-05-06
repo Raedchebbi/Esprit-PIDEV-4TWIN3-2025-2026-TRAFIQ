@@ -1,6 +1,6 @@
-import React from 'react';
-import { Link, Outlet, useLocation } from 'react-router-dom';
-import { MapIcon, NavigationIcon, RouteIcon, BellIcon } from 'lucide-react';
+import React, { useState } from 'react';
+import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Bell, Map, MapPin, Navigation, Route } from 'lucide-react';
 import { useTrafik } from '../../shared/context/TrafikContext';
 import { useProximity } from '../../shared/hooks/useProximity';
 import { useRouteSessionContext } from '../../shared/context/RouteSessionContext';
@@ -11,17 +11,34 @@ import './PublicApp.css';
 
 export default function PublicApp() {
   const location = useLocation();
+  const navigate = useNavigate();
   const { accidentsGPS } = useTrafik();
   const { position, alertCount } = useRouteSessionContext();
   const { nearby, hasNearby } = useProximity(position, accidentsGPS, 30);
 
   const navItems = [
-    { path: '/', icon: MapIcon, label: 'Carte' },
-    { path: '/plan', icon: NavigationIcon, label: 'Itinéraire' },
-    { path: '/routes', icon: RouteIcon, label: 'Routes' },
+    { path: '/', icon: Map, label: 'Carte' },
+    { path: '/plan', icon: Navigation, label: 'Itinéraire' },
+    { path: '/routes', icon: Route, label: 'Routes' },
   ];
 
   const totalAlerts = alertCount + (hasNearby ? nearby.length : 0);
+
+  const handleCenterPosition = () => {
+    if (!position) return;
+
+    const centerEvent = new CustomEvent('trafiq-center-position', {
+      detail: { lat: position.lat, lng: position.lng },
+    });
+
+    if (location.pathname !== '/') {
+      navigate('/', { replace: false });
+      window.setTimeout(() => window.dispatchEvent(centerEvent), 150);
+      return;
+    }
+
+    window.dispatchEvent(centerEvent);
+  };
 
   return (
     <div className="pub-app">
@@ -33,21 +50,27 @@ export default function PublicApp() {
 
         <div className="pub-topbar-search">
           <Link to="/plan" className="pub-search-btn">
-            <span className="pub-search-icon">📍</span>
+            <MapPin className="pub-search-icon" size={14} aria-hidden="true" />
             <span className="pub-search-placeholder">De... → Vers...</span>
-            <span className="pub-search-icon">📍</span>
+            <MapPin className="pub-search-icon" size={14} aria-hidden="true" />
           </Link>
         </div>
 
         <div className="pub-topbar-right">
           <button className="pub-icon-btn" title="Notifications" type="button">
-            <BellIcon size={20} />
+            <Bell size={20} />
             {totalAlerts > 0 && (
               <span className="pub-notif-badge">{totalAlerts}</span>
             )}
           </button>
-          <button className="pub-icon-btn" title="Ma position" type="button">
-            <NavigationIcon size={20} />
+          <button
+            className="pub-icon-btn"
+            title="Ma position"
+            type="button"
+            onClick={handleCenterPosition}
+            disabled={!position}
+          >
+            <Navigation size={20} />
           </button>
           <Link to="/admin/login" className="pub-admin-link">
             Admin ↗

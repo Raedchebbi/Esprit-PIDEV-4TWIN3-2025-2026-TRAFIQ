@@ -5,16 +5,8 @@
 import { useState, useCallback } from 'react';
 import { publicApi } from '../services/publicApi';
 
-// Coordinate mapping for known places (matches RoutePlanner PLACES list)
-const PLACE_COORDS = {
-  'Centre-ville Tunis': { lat: 36.8065, lng: 10.1815 },
-  'Lac Tunis': { lat: 36.8312, lng: 10.2274 },
-  Bardo: { lat: 36.8088, lng: 10.1354 },
-  'La Marsa': { lat: 36.8785, lng: 10.3247 },
-  Carthage: { lat: 36.8586, lng: 10.3234 },
-  Sousse: { lat: 35.8245, lng: 10.6346 },
-  'Ma position': null, // Will use current geolocation
-};
+const COORDINATE_PATTERN =
+  /^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/;
 
 export function useRouteRecommendations() {
   const [routes, setRoutes] = useState([]);
@@ -31,12 +23,12 @@ export function useRouteRecommendations() {
       setIsLoading(true);
       setError(null);
 
-      // Resolve place names to coordinates
+      // Resolve freeform coordinate pairs like "47.79407, 2.19252".
       const origin = resolveCoords(from, userPosition);
       const destination = resolveCoords(to, userPosition);
 
       if (!origin || !destination) {
-        setError('Could not resolve coordinates');
+        setError('Entrez les coordonnees au format "latitude, longitude".');
         setRoutes([]);
         setIsLoading(false);
         return;
@@ -89,9 +81,29 @@ function resolveCoords(placeName, userPosition) {
   if (placeName === 'Ma position') {
     return userPosition
       ? { lat: userPosition.lat, lng: userPosition.lng }
-      : PLACE_COORDS['Centre-ville Tunis'];
+      : null;
   }
-  return PLACE_COORDS[placeName] || null;
+
+  if (typeof placeName !== 'string') {
+    return null;
+  }
+
+  const match = placeName.match(COORDINATE_PATTERN);
+  if (!match) {
+    return null;
+  }
+
+  const lat = Number(match[1]);
+  const lng = Number(match[2]);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+    return null;
+  }
+
+  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+    return null;
+  }
+
+  return { lat, lng };
 }
 
 function normalizeRoute(route) {
@@ -114,6 +126,8 @@ function normalizeRoute(route) {
   return {
     ...route,
     aiLabel,
-    activeIncidents: route.incidents ?? 0,
+    activeIncidents: Array.isArray(route.activeIncidents)
+      ? route.activeIncidents
+      : route.incidents ?? 0,
   };
 }

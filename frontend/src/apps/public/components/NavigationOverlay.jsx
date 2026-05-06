@@ -3,6 +3,17 @@
 // Shows route info, ETA, speed, scoped alert count, and end-navigation control.
 
 import React, { useState, useMemo } from 'react';
+import {
+  AlertTriangle,
+  ChevronDown,
+  ChevronUp,
+  Clock3,
+  Compass,
+  Flag,
+  Navigation,
+  Ruler,
+  X,
+} from 'lucide-react';
 import { useRouteSessionContext } from '../../../shared/context/RouteSessionContext';
 import './NavigationOverlay.css';
 
@@ -118,7 +129,7 @@ export default function NavigationOverlay() {
         aria-label={isCollapsed ? 'Expand navigation' : 'Collapse navigation'}
       >
         <span className="nav-overlay__toggle-icon">
-          {isCollapsed ? '▲' : '▼'}
+          {isCollapsed ? <ChevronUp size={16} aria-hidden="true" /> : <ChevronDown size={16} aria-hidden="true" />}
         </span>
       </button>
 
@@ -139,12 +150,12 @@ export default function NavigationOverlay() {
         <div className="nav-overlay__route-info">
           <span className="nav-overlay__route-name">{routeName}</span>
           <span className="nav-overlay__route-status">
-            {routeInfo.progress >= 0.95 ? '🏁 Arrivée imminente' : '🚗 En navigation'}
+            {routeInfo.progress >= 0.95 ? 'Arrivée imminente' : 'En navigation'}
           </span>
         </div>
         {alertCount > 0 && (
           <div className="nav-overlay__alert-badge" id="nav-alert-badge">
-            <span className="nav-overlay__alert-icon">⚠️</span>
+            <AlertTriangle className="nav-overlay__alert-icon" size={14} aria-hidden="true" />
             <span className="nav-overlay__alert-count">{alertCount}</span>
           </div>
         )}
@@ -155,7 +166,7 @@ export default function NavigationOverlay() {
         <>
           <div className="nav-overlay__stats">
             <div className="nav-overlay__stat">
-              <span className="nav-overlay__stat-icon">⏱</span>
+              <Clock3 className="nav-overlay__stat-icon" size={16} aria-hidden="true" />
               <div className="nav-overlay__stat-content">
                 <span className="nav-overlay__stat-value">
                   {routeInfo.etaMin > 0 ? `${routeInfo.etaMin}` : '<1'}
@@ -167,7 +178,7 @@ export default function NavigationOverlay() {
             <div className="nav-overlay__stat-divider" />
 
             <div className="nav-overlay__stat">
-              <span className="nav-overlay__stat-icon">📏</span>
+              <Ruler className="nav-overlay__stat-icon" size={16} aria-hidden="true" />
               <div className="nav-overlay__stat-content">
                 <span className="nav-overlay__stat-value">
                   {routeInfo.remainingKm.toFixed(1)}
@@ -179,7 +190,7 @@ export default function NavigationOverlay() {
             <div className="nav-overlay__stat-divider" />
 
             <div className="nav-overlay__stat">
-              <span className="nav-overlay__stat-icon">🏎️</span>
+              <Navigation className="nav-overlay__stat-icon" size={16} aria-hidden="true" />
               <div className="nav-overlay__stat-content">
                 <span className="nav-overlay__stat-value">{speedKmh}</span>
                 <span className="nav-overlay__stat-label">km/h</span>
@@ -189,7 +200,7 @@ export default function NavigationOverlay() {
             <div className="nav-overlay__stat-divider" />
 
             <div className="nav-overlay__stat">
-              <span className="nav-overlay__stat-icon">🧭</span>
+              <Compass className="nav-overlay__stat-icon" size={16} aria-hidden="true" />
               <div className="nav-overlay__stat-content">
                 <span className="nav-overlay__stat-value">{compassDir}</span>
                 <span className="nav-overlay__stat-label">{heading}°</span>
@@ -200,7 +211,7 @@ export default function NavigationOverlay() {
           {/* Guidance bar */}
           <div className="nav-overlay__guidance">
             <div className="nav-overlay__guidance-icon">
-              {routeInfo.progress >= 0.95 ? '🏁' : '↗️'}
+              {routeInfo.progress >= 0.95 ? <Flag size={18} aria-hidden="true" /> : <Navigation size={18} aria-hidden="true" />}
             </div>
             <div className="nav-overlay__guidance-text">
               {routeInfo.progress >= 0.95
@@ -222,7 +233,7 @@ export default function NavigationOverlay() {
                 Arrêt en cours...
               </>
             ) : (
-              <>✕ Terminer la navigation</>
+              <><X size={14} aria-hidden="true" /> Terminer la navigation</>
             )}
           </button>
         </>

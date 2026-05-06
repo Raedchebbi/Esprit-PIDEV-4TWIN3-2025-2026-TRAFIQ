@@ -111,7 +111,29 @@ export class AuthService implements OnModuleInit {
       createdBy: superAdmin.id,
     };
 
-    this.users = [superAdmin, demoAdmin];
+    const astrakhanAdmin: User = {
+      id: this.generateId(),
+      email: 'astrakhan@trafiq.ai',
+      name: 'Astrakhan Admin',
+      password: adminHash,
+      role: 'ADMIN',
+      country: 'Astrakhan',
+      createdAt: new Date().toISOString(),
+      createdBy: superAdmin.id,
+    };
+
+    const spainAdmin: User = {
+      id: this.generateId(),
+      email: 'spain@trafiq.ai',
+      name: 'Spain Admin',
+      password: adminHash,
+      role: 'ADMIN',
+      country: 'Spain',
+      createdAt: new Date().toISOString(),
+      createdBy: superAdmin.id,
+    };
+
+    this.users = [superAdmin, demoAdmin, astrakhanAdmin, spainAdmin];
     await this.saveUsers();
   }
 

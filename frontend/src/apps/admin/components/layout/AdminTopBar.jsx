@@ -1,4 +1,5 @@
 import React from 'react';
+import { Earth, Flag } from 'lucide-react';
 import { useAuth } from '../../../../shared/context/AuthContext';
 import './AdminTopBar.css';
 
@@ -17,13 +18,13 @@ export default function AdminTopBar() {
                 </div>
                 {user?.country && (
                     <div className="adm-tb-scope">
-                        <span className="adm-tb-scope-flag">🏳</span>
+                        <Flag className="adm-tb-scope-flag" size={13} aria-hidden="true" />
                         <span>{user.country}</span>
                     </div>
                 )}
                 {isSuperAdmin && (
                     <div className="adm-tb-scope adm-tb-scope-global">
-                        <span className="adm-tb-scope-flag">🌍</span>
+                        <Earth className="adm-tb-scope-flag" size={13} aria-hidden="true" />
                         <span>Global Access</span>
                     </div>
                 )}

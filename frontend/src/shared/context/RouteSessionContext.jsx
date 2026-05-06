@@ -30,6 +30,7 @@ export function RouteSessionProvider({ children }) {
     activeRoute,
     alerts: serverAlerts,
     isNavigating,
+    lastError,
     startNavigation,
     endNavigation,
     updatePosition,
@@ -49,6 +50,10 @@ export function RouteSessionProvider({ children }) {
   const notifications = useScopedNotifications({
     incidents: accidentsGPS,
     routeCoords: activeRoute?.coords || null,
+    routeOrigin:
+      activeRoute?.coords?.[0]
+        ? { lat: activeRoute.coords[0][0], lng: activeRoute.coords[0][1] }
+        : null,
     userPosition: geo.position,
     routeRadiusMeters: 500,
     geoRadiusMeters: 1000,
@@ -132,6 +137,7 @@ export function RouteSessionProvider({ children }) {
     sessionToken,
     activeRoute,
     isNavigating,
+    navigationError: lastError,
     startNavigation: startNavigationAndRedirect,
     endNavigation: endNavigationAndCleanup,
 

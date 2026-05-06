@@ -93,6 +93,9 @@
 }
 
 .adm-cong-zone-cam {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
     font-size: 0.75rem;
     opacity: 0.5;
     margin-top: 2px;

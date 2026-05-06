@@ -65,6 +65,10 @@
 }
 
 .adm-btn-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
     background: var(--adm-accent);
     color: #fff;
     border: none;
@@ -124,6 +128,9 @@
 }
 
 .adm-btn-warning {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
     background: #FF8F00;
     color: #fff;
     border: none;
@@ -137,6 +144,9 @@
 .adm-btn-warning:hover { background: #EF6C00; }
 
 .adm-btn-danger {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
     background: #D32F2F;
     color: #fff;
     border: none;
@@ -150,6 +160,9 @@
 .adm-btn-danger:hover { background: #B71C1C; }
 
 .adm-btn-ghost {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
     background: transparent;
     color: #546E7A;
     border: 1px solid #CFD8DC;

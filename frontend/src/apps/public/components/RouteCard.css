@@ -52,6 +52,15 @@
     flex-wrap: wrap;
 }
 
+.route-card-stats span,
+.route-card-incident,
+.route-card-clear,
+.route-card-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
 .route-card-incident {
     font-size: 0.8rem;
     color: #F57C00;

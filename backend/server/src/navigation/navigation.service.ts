@@ -217,6 +217,12 @@ export class NavigationService implements OnModuleDestroy {
         session.currentPosition.lat,
         session.currentPosition.lng,
       );
+      const distFromOrigin = this.haversine(
+        incLat,
+        incLng,
+        session.origin.lat,
+        session.origin.lng,
+      );
       const isGeoScoped = distToUser <= 1000;
 
       if (!isRouteScoped && !isGeoScoped) continue;
@@ -231,18 +237,23 @@ export class NavigationService implements OnModuleDestroy {
       let type: 'accident' | 'congestion' | 'risk' | 'blocked' = 'accident';
       if (inc.incident_type === 'vehicle_collision') type = 'accident';
 
+      const alertScope: 'route' | 'geo' = isRouteScoped ? 'route' : 'geo';
+      const alertDistance = Math.round(
+        alertScope === 'route' ? distFromOrigin : distToUser,
+      );
+
       alerts.push({
         id: inc.incident_id,
         type,
         severity,
         title: this.getAlertTitle(type, severity),
-        message: this.getAlertMessage(inc, Math.round(distToUser)),
-        distance: Math.round(distToUser),
+        message: this.getAlertMessage(inc, alertDistance, alertScope),
+        distance: alertDistance,
         lat: incLat,
         lng: incLng,
         cameraId: inc.camera_id,
         timestamp: inc.timestamp,
-        scope: isRouteScoped ? 'route' : 'geo',
+        scope: alertScope,
       });
     }
 
@@ -301,10 +312,16 @@ export class NavigationService implements OnModuleDestroy {
       session.currentPosition.lat,
       session.currentPosition.lng,
     );
+    const distFromOrigin = this.haversine(
+      incLat,
+      incLng,
+      session.origin.lat,
+      session.origin.lng,
+    );
     const isGeoScoped = distToUser <= 1000;
 
     if (isRouteScoped)
-      return { relevant: true, scope: 'route', distance: distToUser };
+      return { relevant: true, scope: 'route', distance: distFromOrigin };
     if (isGeoScoped)
       return { relevant: true, scope: 'geo', distance: distToUser };
     return { relevant: false, scope: null, distance: distToUser };
@@ -345,6 +362,12 @@ export class NavigationService implements OnModuleDestroy {
         session.currentPosition.lat,
         session.currentPosition.lng,
       );
+      const distFromOrigin = this.haversine(
+        cam.location.latitude,
+        cam.location.longitude,
+        session.origin.lat,
+        session.origin.lng,
+      );
 
       const level = pc.count > 30 ? 'Saturé' : 'Dense';
       alerts.push({
@@ -352,8 +375,10 @@ export class NavigationService implements OnModuleDestroy {
         type: 'congestion',
         severity: pc.count > 30 ? 'high' : 'medium',
         title: `Trafic ${level}`,
-        message: `Zone ${cam.area} — ${pc.count} véhicules détectés. Ralentissement probable.`,
-        distance: Math.round(distToUser),
+        message: `Zone ${cam.area} — ${pc.count} véhicules détectés à ${Math.round(
+          distFromOrigin,
+        )}m du départ. Ralentissement probable.`,
+        distance: Math.round(distFromOrigin),
         lat: cam.location.latitude,
         lng: cam.location.longitude,
         cameraId: pc.cam_id,
@@ -369,20 +394,26 @@ export class NavigationService implements OnModuleDestroy {
     const titles: Record<string, string> = {
       accident:
         severity === 'critical'
-          ? '🚨 ACCIDENT CRITIQUE SUR VOTRE ROUTE'
-          : '⚠️ Accident détecté à proximité',
+          ? 'ACCIDENT CRITIQUE SUR VOTRE ROUTE'
+          : 'Accident détecté à proximité',
       congestion: 'Congestion détectée',
       risk: 'Zone à risque',
-      blocked: '🚫 Route bloquée',
+      blocked: 'Route bloquée',
     };
     return titles[type] || 'Alerte TRAFIQ';
   }
 
-  private getAlertMessage(inc: Accident, distance: number): string {
+  private getAlertMessage(
+    inc: Accident,
+    distance: number,
+    scope: 'route' | 'geo',
+  ): string {
     const riskInfo = inc.risk_level
       ? ` Niveau de risque: ${inc.risk_level}.`
       : '';
-    return `Incident détecté à ${distance}m de votre position.${riskInfo} ${inc.risk_reason || 'Soyez vigilant.'}`;
+    const distanceLabel =
+      scope === 'route' ? 'du départ de votre itinéraire' : 'de votre position';
+    return `Incident détecté à ${distance}m ${distanceLabel}.${riskInfo} ${inc.risk_reason || 'Soyez vigilant.'}`;
   }
 
   private haversine(

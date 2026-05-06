@@ -57,7 +57,7 @@ export default function SnapshotViewer({ incident, width = 640, height = 360 }) 
         ctx.fillRect(0, 0, canvas.width, 40);
         ctx.fillStyle = '#fff';
         ctx.font = 'bold 14px Plus Jakarta Sans';
-        ctx.fillText(`⚠ ACCIDENT CONFIRMÉ — ${incident?.level || 'L2 HYBRIDE'}`, 20, 26);
+        ctx.fillText(`ACCIDENT CONFIRMÉ — ${incident?.level || 'L2 HYBRIDE'}`, 20, 26);
 
         // Bottom Meta
         ctx.fillStyle = 'rgba(15, 28, 46, 0.8)';

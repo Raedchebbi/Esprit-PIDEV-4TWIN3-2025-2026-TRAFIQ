@@ -37,7 +37,7 @@
 }
 
 .routes-global-icon {
-    font-size: 1.4rem;
+    flex-shrink: 0;
 }
 
 .routes-global-label {
@@ -57,6 +57,14 @@
     display: flex;
     flex-direction: column;
     gap: 16px;
+}
+
+.routes-empty {
+    background: #fff;
+    border-radius: 14px;
+    padding: 16px;
+    color: var(--pub-text-secondary);
+    box-shadow: var(--pub-shadow);
 }
 
 .routes-section {
@@ -91,7 +99,6 @@
 }
 
 .routes-row-icon {
-    font-size: 1rem;
     flex-shrink: 0;
 }
 
@@ -109,6 +116,9 @@
 }
 
 .routes-row-meta {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
     font-family: var(--font-mono);
     font-size: 0.78rem;
     flex-shrink: 0;

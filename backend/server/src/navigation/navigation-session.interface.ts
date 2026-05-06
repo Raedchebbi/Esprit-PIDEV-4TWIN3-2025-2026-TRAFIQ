@@ -40,7 +40,7 @@ export interface NavigationAlert {
   severity: 'low' | 'medium' | 'high' | 'critical';
   title: string;
   message: string;
-  distance: number; // meters from user
+  distance: number; // meters from route origin for route scope, user for geo scope
   lat: number;
   lng: number;
   cameraId?: string;
@@ -143,6 +143,7 @@ export interface SuggestedRoute {
   dist: number;
   status: 'free' | 'slow' | 'blocked';
   incidents: number;
+  activeIncidents: PublicIncident[];
   riskScore: number;
   congestionLevel: string;
   coords: [number, number][];

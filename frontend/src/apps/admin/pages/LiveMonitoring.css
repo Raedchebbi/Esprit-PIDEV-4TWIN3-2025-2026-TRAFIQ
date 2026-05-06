@@ -151,6 +151,6 @@
     background: rgba(255,255,255,0.02);
     color: rgba(255,255,255,0.4);
 }
-.adm-feed-placeholder-icon { font-size: 2rem; opacity: 0.4; }
+.adm-feed-placeholder-icon { opacity: 0.4; }
 .adm-feed-placeholder-text { font-size: 0.78rem; font-weight: 600; }
 .adm-feed-placeholder-sub { font-size: 0.68rem; opacity: 0.6; text-align: center; padding: 0 12px; }

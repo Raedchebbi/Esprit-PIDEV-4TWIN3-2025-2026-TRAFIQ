@@ -120,7 +120,7 @@
     background: rgba(230, 81, 0, 0.08);
 }
 .adm-tb-scope-flag {
-    font-size: 0.82rem;
+    flex-shrink: 0;
 }
 
 /* ── Role Badge ────────────────────────────────────────────────────────────────*/

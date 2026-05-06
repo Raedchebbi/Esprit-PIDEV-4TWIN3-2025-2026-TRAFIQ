@@ -126,8 +126,7 @@
 }
 
 .rec-card__stat-icon {
-  font-size: 0.85rem;
-  line-height: 1;
+  flex-shrink: 0;
 }
 
 .rec-card__stat-text {
@@ -176,6 +175,9 @@
 
 /* ── Incident Info ────────────────────────────────────────── */
 .rec-card__incidents {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: 0.78rem;
   padding: 6px 10px;
   border-radius: 8px;

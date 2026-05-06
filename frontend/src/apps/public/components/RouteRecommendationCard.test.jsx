@@ -37,6 +37,23 @@ describe('RouteRecommendationCard', () => {
     expect(screen.getByText(/Aucun incident signalé/i)).toBeInTheDocument();
   });
 
+  it('normalizes backend risk scores expressed as fractions', () => {
+    render(
+      <RouteRecommendationCard
+        route={{
+          ...route,
+          riskScore: 0.42,
+          aiLabel: 'ALTERNATIVE',
+          label: 'ALTERNATIF +4 min',
+        }}
+        selected={false}
+      />,
+    );
+
+    expect(screen.getByText(/Modéré/i)).toBeInTheDocument();
+    expect(screen.getByText(/42%/i)).toBeInTheDocument();
+  });
+
   it('starts navigation when the CTA is clicked', async () => {
     render(<RouteRecommendationCard route={route} selected={false} />);
 

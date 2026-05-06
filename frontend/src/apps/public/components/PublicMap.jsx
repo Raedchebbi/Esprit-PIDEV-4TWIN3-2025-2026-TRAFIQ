@@ -1,8 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, Circle, useMap } from 'react-leaflet';
 import L from 'leaflet';
+import { AlertTriangle, Circle as CircleIcon, MapPin, Route } from 'lucide-react';
 import { useTrafik } from '../../../shared/context/TrafikContext';
 import { useProximity } from '../../../shared/hooks/useProximity';
+import {
+    MAP_DEFAULT_LAT,
+    MAP_DEFAULT_LNG,
+} from '../../../shared/config/runtimeConfig';
 
 const userIcon = L.divIcon({
     html: `<div class="user-marker"><div class="user-marker-dot"></div><div class="user-marker-ring"></div></div>`,
@@ -10,28 +15,43 @@ const userIcon = L.divIcon({
 });
 
 const accidentIcon = L.divIcon({
-    html: `<div style="background:#E53935;color:white;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;border:2px solid white;box-shadow:0 2px 8px rgba(229,57,53,0.5);animation:pulse 1.5s infinite">🔴</div>`,
+    html: `<div style="background:#E53935;color:white;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid white;box-shadow:0 2px 8px rgba(229,57,53,0.5);animation:pulse 1.5s infinite"><span style="width:12px;height:12px;border-radius:999px;background:white;display:block"></span></div>`,
     className: '', iconAnchor: [14, 14]
 });
 
-const polylineColors = { free: '#2E7D32', blocked: '#B71C1C', slow: '#FF8F00' };
-
-function RecenterMap({ position }) {
+function RecenterMap({ center }) {
     const map = useMap();
     useEffect(() => {
-        if (position) {
-            map.setView([position.lat, position.lng], 15);
+        if (center) {
+            map.setView(center, 15);
         }
-    }, [map, position]);
+    }, [map, center]);
     return null;
 }
 
 export default function PublicMap({ activeRoute, position, showProximityCircle }) {
-    const { accidentsGPS, polylines } = useTrafik();
+    const { accidentsGPS } = useTrafik();
     const { nearby } = useProximity(position, accidentsGPS, 30);
     const [legendVisible, setLegendVisible] = useState(true);
+    const [forcedCenter, setForcedCenter] = useState(null);
+
+    useEffect(() => {
+        const handleCenterEvent = (event) => {
+            const { lat, lng } = event.detail || {};
+            if (typeof lat === 'number' && typeof lng === 'number') {
+                setForcedCenter([lat, lng]);
+            }
+        };
+
+        window.addEventListener('trafiq-center-position', handleCenterEvent);
+        return () => window.removeEventListener('trafiq-center-position', handleCenterEvent);
+    }, []);
 
     const activeAccidents = accidentsGPS.filter(a => a.active).slice(0, 2);
+    const mapCenter = activeRoute?.coords?.[0]
+        || (position ? [position.lat, position.lng] : null)
+        || [MAP_DEFAULT_LAT, MAP_DEFAULT_LNG];
+    const center = forcedCenter || mapCenter;
 
     return (
         <div className="pub-map-container">
@@ -44,7 +64,7 @@ export default function PublicMap({ activeRoute, position, showProximityCircle }
       `}</style>
 
             <MapContainer
-                center={[36.8068, 10.1816]}
+                center={center}
                 zoom={15}
                 style={{ height: '100%', width: '100%' }}
                 zoomControl={false}
@@ -54,20 +74,7 @@ export default function PublicMap({ activeRoute, position, showProximityCircle }
                     attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
                     maxZoom={19}
                 />
-                <RecenterMap position={position} />
-
-                {/* Road polylines */}
-                {polylines.map(road => (
-                    <Polyline
-                        key={road.id}
-                        positions={road.coords}
-                        color={polylineColors[road.status] || '#888'}
-                        weight={road.status === 'blocked' ? 5 : 3}
-                        opacity={0.8}
-                    >
-                        <Popup><b>{road.id}</b> — {road.status}</Popup>
-                    </Polyline>
-                ))}
+                <RecenterMap center={mapCenter} />
 
                 {/* Active route */}
                 {activeRoute && (
@@ -77,6 +84,7 @@ export default function PublicMap({ activeRoute, position, showProximityCircle }
                         weight={activeRoute.weight}
                         opacity={activeRoute.opacity}
                         dashArray={activeRoute.dashArray}
+                        pathOptions={{ lineCap: 'round', lineJoin: 'round' }}
                     />
                 )}
 
@@ -84,7 +92,7 @@ export default function PublicMap({ activeRoute, position, showProximityCircle }
                 {position && (
                     <>
                         <Marker position={[position.lat, position.lng]} icon={userIcon}>
-                            <Popup>📍 Ma position</Popup>
+                            <Popup>Ma position</Popup>
                         </Marker>
                         {showProximityCircle && nearby.length > 0 && (
                             <Circle
@@ -106,7 +114,7 @@ export default function PublicMap({ activeRoute, position, showProximityCircle }
                         <Marker position={[acc.lat, acc.lng]} icon={accidentIcon}>
                             <Popup>
                                 <div style={{ fontFamily: 'var(--font-body)', minWidth: 180 }}>
-                                    <div style={{ fontWeight: 700, color: '#E53935', marginBottom: 4 }}>🚨 {acc.type}</div>
+                                    <div style={{ fontWeight: 700, color: '#E53935', marginBottom: 4 }}>{acc.type}</div>
                                     <div style={{ fontSize: '0.8rem', color: '#5A6A7A' }}>Sévérité : <b>{acc.severity}</b></div>
                                     <div style={{ fontSize: '0.8rem', color: '#5A6A7A' }}>Score : {acc.score}</div>
                                 </div>
@@ -127,10 +135,9 @@ export default function PublicMap({ activeRoute, position, showProximityCircle }
             {/* Legend */}
             {legendVisible && (
                 <div className="pub-map-legend">
-                    <span>🔴 Accident</span>
-                    <span>🟡 Dense</span>
-                    <span style={{ color: '#B71C1C' }}>● Bloqué</span>
-                    <span style={{ color: '#2E7D32' }}>● Libre</span>
+                    <span><AlertTriangle size={14} aria-hidden="true" /> Accident</span>
+                    <span><MapPin size={14} aria-hidden="true" /> Votre position</span>
+                    <span><Route size={14} aria-hidden="true" /> Itinéraire actif</span>
                     <button onClick={() => setLegendVisible(false)}>Masquer</button>
                 </div>
             )}

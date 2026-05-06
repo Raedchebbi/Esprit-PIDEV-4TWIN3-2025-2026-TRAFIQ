@@ -1,0 +1,10 @@
+﻿{
+  "providers": {
+    "azure": {
+      "resourceName": "admin-3342-resource",
+      "apiKey": "e485b20aeafb467b994cbea117552408",
+      "deployment": "gpt-5.4-1"
+    }
+  },
+  "defaultProvider": "azure"
+}

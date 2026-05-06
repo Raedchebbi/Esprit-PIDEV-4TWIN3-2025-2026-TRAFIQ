@@ -72,7 +72,7 @@
 }
 
 .home-route-icon {
-    font-size: 1rem;
+    flex-shrink: 0;
 }
 
 .home-route-name {
@@ -93,7 +93,19 @@
     font-family: var(--font-mono);
 }
 
+.home-route-empty {
+    padding: 10px;
+    color: var(--pub-text-secondary);
+    font-size: 0.85rem;
+    background: var(--pub-bg-sheet);
+    border-radius: 10px;
+}
+
 .home-plan-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
     display: block;
     text-align: center;
     padding: 12px;

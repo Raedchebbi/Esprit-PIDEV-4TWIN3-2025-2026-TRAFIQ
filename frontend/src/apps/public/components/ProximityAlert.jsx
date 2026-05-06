@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { Bell, TriangleAlert, X } from 'lucide-react';
 import { useNotifications } from '../../../shared/hooks/useNotifications';
 import './ProximityAlert.css';
 
@@ -15,7 +16,7 @@ export default function ProximityAlert({ accidents }) {
         visible.forEach(a => {
             sendNotification(
                 a.id,
-                '⚠️ TRAFIQ — Accident proche',
+                'TRAFIQ — Accident proche',
                 `Un accident a été détecté à ${a.distance}m sur votre route. Des itinéraires alternatifs sont disponibles.`
             );
         });
@@ -28,7 +29,7 @@ export default function ProximityAlert({ accidents }) {
             {/* Notification permission banner */}
             {showNotificationBanner && (
                 <div className="notif-permission-banner">
-                    <span>🔔 Activez les notifications pour recevoir des alertes d'accidents en temps réel.</span>
+                    <span><Bell size={16} aria-hidden="true" /> Activez les notifications pour recevoir des alertes d'accidents en temps réel.</span>
                     <div className="notif-banner-actions">
                         <button onClick={() => { requestPermission(); setBannerDismissed(true); }}>
                             Activer les notifications
@@ -42,7 +43,7 @@ export default function ProximityAlert({ accidents }) {
             <div className="proximity-alerts-stack">
                 {visible.slice(0, 2).map(accident => (
                     <div key={accident.id} className="proximity-toast">
-                        <div className="proximity-toast-icon">🚨</div>
+                        <div className="proximity-toast-icon"><TriangleAlert size={20} aria-hidden="true" /></div>
                         <div className="proximity-toast-body">
                             <div className="proximity-toast-title">ACCIDENT DÉTECTÉ SUR VOTRE ROUTE</div>
                             <div className="proximity-toast-sub">
@@ -52,7 +53,9 @@ export default function ProximityAlert({ accidents }) {
                                 Voir itinéraires alternatifs →
                             </Link>
                         </div>
-                        <button className="proximity-toast-close" onClick={() => setDismissed(d => [...d, accident.id])}>✕</button>
+                        <button className="proximity-toast-close" onClick={() => setDismissed(d => [...d, accident.id])}>
+                            <X size={14} aria-hidden="true" />
+                        </button>
                     </div>
                 ))}
             </div>

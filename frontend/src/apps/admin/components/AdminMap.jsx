@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Circle, useMap } from 'react-leaflet';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import L from 'leaflet';
+import { CarFront, Video } from 'lucide-react';
 import { trafiqApi } from '../../../shared/services/trafiqApi';
 
 // ─── Risk scoring (shown in popup stats) ──────────────────────────────────────
@@ -224,7 +225,7 @@ export default function AdminMap() {
 
                                         {/* Live vehicle count */}
                                         <div style={{ fontWeight: 700, marginBottom: 4 }}>
-                                            🚗 Véhicules détectés : {liveVehicles}
+                                            Véhicules détectés : {liveVehicles}
                                         </div>
 
                                         {/* Risk assessment stats */}
@@ -252,7 +253,7 @@ export default function AdminMap() {
                                             }}
                                             onClick={() => navigate('/admin/live')}
                                         >
-                                            📹 Voir flux live
+                                            Voir flux live
                                         </button>
                                     </div>
                                 </Popup>

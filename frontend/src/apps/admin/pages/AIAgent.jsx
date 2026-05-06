@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { Bot, ChartColumn, CircleCheck, FileText, RefreshCw } from 'lucide-react';
 import { trafiqApi } from '../../../shared/services/trafiqApi';
 import './AIAgent.css';
 
@@ -64,11 +65,13 @@ export default function AIAgent() {
             <div className="adm-ai-grid">
                 {/* Column 1: Pipeline */}
                 <div className="adm-ai-card pipeline">
-                    <div className="adm-ai-card-title">🤖 Pipeline de décision</div>
+                    <div className="adm-ai-card-title"><Bot size={16} aria-hidden="true" /> Pipeline de décision</div>
                     <div className="adm-pipeline-steps">
                         {pipeline.map((data) => (
                             <div key={data.key} className={`adm-step-item ${data.running ? 'running' : ''}`}>
-                                <div className="adm-step-icon">{data.ok ? '✅' : '🔄'}</div>
+                                <div className="adm-step-icon">
+                                    {data.ok ? <CircleCheck size={16} aria-hidden="true" /> : <RefreshCw size={16} aria-hidden="true" />}
+                                </div>
                                 <div className="adm-step-info">
                                     <div className="adm-step-name">{data.key}</div>
                                     <div className="adm-step-val">{data.value}</div>
@@ -81,7 +84,7 @@ export default function AIAgent() {
 
                 {/* Column 2: Log */}
                 <div className="adm-ai-card logs">
-                    <div className="adm-ai-card-title">📋 Journal de décisions</div>
+                    <div className="adm-ai-card-title"><FileText size={16} aria-hidden="true" /> Journal de décisions</div>
                     <div className="adm-ai-logs-list">
                         {events.slice(0, 15).map((ev, i) => (
                             <div key={i} className={`adm-ai-log-entry ${ev.type.toLowerCase()}`}>
@@ -100,7 +103,7 @@ export default function AIAgent() {
 
                 {/* Column 3: Stats */}
                 <div className="adm-ai-card stats">
-                    <div className="adm-ai-card-title">📊 Performance du moteur</div>
+                    <div className="adm-ai-card-title"><ChartColumn size={16} aria-hidden="true" /> Performance du moteur</div>
                     <div className="adm-ai-metrics">
                         <div className="adm-metric-row">
                             <span>Sources actives :</span>

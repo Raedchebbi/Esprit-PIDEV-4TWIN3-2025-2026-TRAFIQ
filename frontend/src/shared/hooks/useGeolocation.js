@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'react';
-import { USER_POSITION_MOCK } from './useTrafikData';
 
 export function useGeolocation() {
     const hasGeolocation = typeof navigator !== 'undefined' && 'geolocation' in navigator;
-    const [position, setPosition] = useState(hasGeolocation ? null : USER_POSITION_MOCK);
+    const [position, setPosition] = useState(null);
     const [error, setError] = useState(hasGeolocation ? null : 'Geolocation not supported');
 
     useEffect(() => {
@@ -18,7 +17,6 @@ export function useGeolocation() {
             },
             (err) => {
                 setError(err.message);
-                setPosition(USER_POSITION_MOCK); // Fallback mock
             },
             { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 }
         );
@@ -26,5 +24,5 @@ export function useGeolocation() {
         return () => navigator.geolocation.clearWatch(watchId);
     }, [hasGeolocation]);
 
-    return { position: position || USER_POSITION_MOCK, error };
+    return { position, error };
 }

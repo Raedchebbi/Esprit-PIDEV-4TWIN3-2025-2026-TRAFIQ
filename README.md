@@ -466,7 +466,7 @@ The following upgrades were added to move TRAFIQ from a local demo architecture 
 | `GET` | `/cameras` | List enabled cameras; `ADMIN` users are automatically country-filtered |
 | `GET` | `/vehicle-counts` | Return latest live counts, filtered by role/country scope |
 | `GET` | `/accidents` | List all incidents, including false positives, within the caller's scope |
-| `GET` | `/accidents/active` | List only active incidents (false positives excluded) |
+| `GET` | `/accidents/active` | List the authoritative active incidents in the caller's scope (false positives excluded; local JSON fallback also applies the 15-minute activity window) |
 | `PATCH` | `/accidents/flag` | Flag incidents as false positives `{ ids: string[] }` |
 | `PATCH` | `/accidents/unflag` | Restore flagged incidents `{ ids: string[] }` |
 | `DELETE` | `/accidents/remove` | Permanently remove incidents `{ ids: string[] }` |
@@ -478,10 +478,10 @@ The following upgrades were added to move TRAFIQ from a local demo architecture 
 |--------|-------|-------------|
 | `GET` | `/public/incidents` | Return active incidents enriched with camera GPS coordinates |
 | `GET` | `/public/congestion` | Return per-zone congestion levels derived from live vehicle counts |
-| `POST` | `/public/routes/suggest` | Return risk-aware route suggestions between origin and destination |
+| `POST` | `/public/routes/suggest` | Return risk-aware, road-aligned route suggestions between origin and destination, including route-specific camera incident markers in `activeIncidents` |
 | `POST` | `/public/navigation/start` | Start a citizen navigation session |
 | `PATCH` | `/public/navigation/:id/position` | Update the live user position for a session |
-| `GET` | `/public/navigation/:id/alerts` | Return route-scoped and geo-scoped alerts for the session |
+| `GET` | `/public/navigation/:id/alerts` | Return route-scoped and geo-scoped alerts for the session; route distances are measured from the itinerary start and geo distances from the live user position |
 | `DELETE` | `/public/navigation/:id` | End a navigation session |
 
 ### WebSocket Events - Admin / Core Namespace
@@ -504,7 +504,7 @@ The following upgrades were added to move TRAFIQ from a local demo architecture 
 | Client → NestJS | `subscribe_route` | `{ sessionId, sessionToken }` when centralized sessions are enabled |
 | Client → NestJS | `update_position` | `{ sessionId, sessionToken, lat, lng, heading?, speed? }` when centralized sessions are enabled |
 | Client → NestJS | `unsubscribe_route` | `{ sessionId }` |
-| NestJS → Client | `navigation_alert` | Route-relevant incident alert enriched with scope and distance |
+| NestJS → Client | `navigation_alert` | Route-relevant incident alert enriched with scope and distance semantics (`route` = from itinerary start, `geo` = from live user position) |
 | NestJS → Client | `route_congestion_update` | Congestion alerts for zones affecting the subscribed route |
 
 ---
@@ -636,6 +636,8 @@ Local development can still seed demo users when `NODE_ENV !== production` and `
 |------|-------|----------|-------|
 | **SUPER_ADMIN** | `super@trafiq.ai` | `SuperAdmin2025!` | Global |
 | **ADMIN** | `admin@trafiq.ai` | `trafiq2025` | France |
+| **ADMIN** | `astrakhan@trafiq.ai` | `trafiq2025` | Astrakhan |
+| **ADMIN** | `spain@trafiq.ai` | `trafiq2025` | Spain |
 
 ### 5. Docker Builds
 

@@ -3,13 +3,22 @@
 // Renders floating toast stack for urgent alerts and subtle banners for info.
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import {
+  AlertTriangle,
+  CircleAlert,
+  Clock3,
+  Info,
+  MapPin,
+  Siren,
+  X,
+} from 'lucide-react';
 import { useRouteSessionContext } from '../../../shared/context/RouteSessionContext';
 import { useNotifications } from '../../../shared/hooks/useNotifications';
 import './NavigationNotifications.css';
 
 const SEVERITY_CONFIG = {
   critical: {
-    icon: '🚨',
+    Icon: Siren,
     label: 'CRITIQUE',
     color: '#B71C1C',
     bg: '#FFEBEE',
@@ -17,7 +26,7 @@ const SEVERITY_CONFIG = {
     autoDismiss: false,
   },
   high: {
-    icon: '⚠️',
+    Icon: AlertTriangle,
     label: 'ÉLEVÉ',
     color: '#E65100',
     bg: '#FFF3E0',
@@ -25,7 +34,7 @@ const SEVERITY_CONFIG = {
     autoDismiss: false,
   },
   medium: {
-    icon: '⚠️',
+    Icon: CircleAlert,
     label: 'MODÉRÉ',
     color: '#F57C00',
     bg: '#FFF8E1',
@@ -33,7 +42,7 @@ const SEVERITY_CONFIG = {
     autoDismiss: true,
   },
   low: {
-    icon: 'ℹ️',
+    Icon: Info,
     label: 'INFO',
     color: '#0277BD',
     bg: '#E1F5FE',
@@ -43,8 +52,8 @@ const SEVERITY_CONFIG = {
 };
 
 const SCOPE_LABELS = {
-  route: '🛤️ Sur votre trajet',
-  geo: '📍 À proximité',
+  route: 'Sur votre trajet',
+  geo: 'À proximité',
 };
 
 const AUTO_DISMISS_MS = 10000; // 10 seconds for non-critical alerts
@@ -94,7 +103,7 @@ export default function NavigationNotifications() {
         notifiedRef.current.add(alert.id);
         sendNotification(
           alert.id,
-          alert.title || '⚠️ Alerte TRAFIQ',
+          alert.title || 'Alerte TRAFIQ',
           alert.message || `Incident à ${alert.distance}m`
         );
       }
@@ -132,6 +141,14 @@ export default function NavigationNotifications() {
     return `${(meters / 1000).toFixed(1)}km`;
   };
 
+  const getDistanceLabel = (alert) => {
+    const distanceText = formatDistance(alert.distance);
+    if (!distanceText) return '';
+    return alert.scope === 'route'
+      ? `${distanceText} du départ`
+      : `${distanceText} de vous`;
+  };
+
   // Format timestamp
   const formatTime = (ts) => {
     try {
@@ -150,6 +167,7 @@ export default function NavigationNotifications() {
         const config = SEVERITY_CONFIG[alert.severity] || SEVERITY_CONFIG.medium;
         const isDismissing = dismissingIds.has(alert.id);
         const scopeLabel = SCOPE_LABELS[alert.scope] || '';
+        const SeverityIcon = config.Icon;
 
         return (
           <div
@@ -166,7 +184,7 @@ export default function NavigationNotifications() {
             <div className="nav-notif-toast__indicator" />
 
             {/* Icon */}
-            <div className="nav-notif-toast__icon">{config.icon}</div>
+            <div className="nav-notif-toast__icon"><SeverityIcon size={20} aria-hidden="true" /></div>
 
             {/* Content */}
             <div className="nav-notif-toast__body">
@@ -189,12 +207,12 @@ export default function NavigationNotifications() {
               <div className="nav-notif-toast__meta">
                 {alert.distance > 0 && (
                   <span className="nav-notif-toast__distance">
-                    📍 {formatDistance(alert.distance)}
+                    <MapPin size={12} aria-hidden="true" /> {getDistanceLabel(alert)}
                   </span>
                 )}
                 {alert.timestamp && (
                   <span className="nav-notif-toast__time">
-                    🕐 {formatTime(alert.timestamp)}
+                    <Clock3 size={12} aria-hidden="true" /> {formatTime(alert.timestamp)}
                   </span>
                 )}
               </div>
@@ -216,7 +234,7 @@ export default function NavigationNotifications() {
               onClick={() => handleDismiss(alert.id)}
               aria-label="Fermer l'alerte"
             >
-              ✕
+              <X size={14} aria-hidden="true" />
             </button>
           </div>
         );

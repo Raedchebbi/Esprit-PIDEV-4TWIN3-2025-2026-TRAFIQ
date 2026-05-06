@@ -1,5 +1,16 @@
 // ── TRAFIQ — Admin Management Page (SUPER_ADMIN only) ─────────────────────────
 import React, { useState, useEffect, useCallback } from 'react';
+import {
+    Building2,
+    Check,
+    Earth,
+    Flag,
+    Lock,
+    Pencil,
+    Users,
+    X,
+    Trash2,
+} from 'lucide-react';
 import { trafiqApi } from '../../../shared/services/trafiqApi';
 import { useAuth } from '../../../shared/context/AuthContext';
 import './AdminManagement.css';
@@ -31,7 +42,7 @@ export default function AdminManagement() {
         return (
             <div className="adm-mgmt-page">
                 <div className="adm-mgmt-forbidden">
-                    <span className="adm-mgmt-lock">🔒</span>
+                    <Lock className="adm-mgmt-lock" size={44} aria-hidden="true" />
                     <h2>Accès Refusé</h2>
                     <p>Seul le SUPER_ADMIN peut gérer les administrateurs.</p>
                 </div>
@@ -93,10 +104,10 @@ export default function AdminManagement() {
     const countryAdmins = admins.filter(a => a.role === 'ADMIN');
 
     return (
-        <div className="adm-mgmt-page">
+            <div className="adm-mgmt-page">
             <div className="adm-mgmt-header">
                 <div>
-                    <h2>👥 Gestion des Administrateurs</h2>
+                    <h2><Users size={20} aria-hidden="true" /> Gestion des Administrateurs</h2>
                     <p className="adm-mgmt-sub">
                         {admins.length} utilisateur(s) · {countryAdmins.length} admin(s) pays ·
                         {superAdmins.length} super admin(s)
@@ -106,7 +117,7 @@ export default function AdminManagement() {
                     className="adm-mgmt-create-btn"
                     onClick={() => setShowCreate(!showCreate)}
                 >
-                    {showCreate ? '✕ Annuler' : '+ Nouvel Admin'}
+                    {showCreate ? <><X size={14} aria-hidden="true" /> Annuler</> : '+ Nouvel Admin'}
                 </button>
             </div>
 
@@ -165,7 +176,8 @@ export default function AdminManagement() {
                             </div>
                         </div>
                         <button type="submit" className="adm-mgmt-submit-btn">
-                            ✓ Créer l'administrateur
+                            <Check size={14} aria-hidden="true" />
+                            Créer l'administrateur
                         </button>
                     </form>
                 </div>
@@ -174,7 +186,7 @@ export default function AdminManagement() {
             {/* Super Admins Section */}
             <div className="adm-mgmt-section">
                 <h3 className="adm-mgmt-section-title">
-                    <span className="adm-mgmt-role-icon super">⭐</span>
+                    <Earth className="adm-mgmt-role-icon super" size={18} aria-hidden="true" />
                     Super Administrateurs
                 </h3>
                 <div className="adm-mgmt-table-wrap">
@@ -201,7 +213,7 @@ export default function AdminManagement() {
                                     </td>
                                     <td>{admin.email}</td>
                                     <td><span className="adm-mgmt-badge super">SUPER_ADMIN</span></td>
-                                    <td><span className="adm-mgmt-scope global">🌍 Global</span></td>
+                                    <td><span className="adm-mgmt-scope global"><Earth size={14} aria-hidden="true" /> Global</span></td>
                                     <td>{admin.createdAt ? new Date(admin.createdAt).toLocaleDateString() : '—'}</td>
                                 </tr>
                             ))}
@@ -213,7 +225,7 @@ export default function AdminManagement() {
             {/* Country Admins Section */}
             <div className="adm-mgmt-section">
                 <h3 className="adm-mgmt-section-title">
-                    <span className="adm-mgmt-role-icon admin">🏛</span>
+                    <Building2 className="adm-mgmt-role-icon admin" size={18} aria-hidden="true" />
                     Administrateurs Pays
                 </h3>
                 {countryAdmins.length === 0 ? (
@@ -256,7 +268,7 @@ export default function AdminManagement() {
                                                     ))}
                                                 </select>
                                             ) : (
-                                                <span className="adm-mgmt-scope country">🏳 {admin.country}</span>
+                                                <span className="adm-mgmt-scope country"><Flag size={14} aria-hidden="true" /> {admin.country}</span>
                                             )}
                                         </td>
                                         <td>{admin.createdAt ? new Date(admin.createdAt).toLocaleDateString() : '—'}</td>
@@ -268,13 +280,13 @@ export default function AdminManagement() {
                                                             className="adm-mgmt-action-btn save"
                                                             onClick={() => handleUpdate(admin.id)}
                                                         >
-                                                            ✓
+                                                            <Check size={14} aria-hidden="true" />
                                                         </button>
                                                         <button
                                                             className="adm-mgmt-action-btn cancel"
                                                             onClick={() => setEditingId(null)}
                                                         >
-                                                            ✕
+                                                            <X size={14} aria-hidden="true" />
                                                         </button>
                                                     </>
                                                 ) : (
@@ -283,13 +295,13 @@ export default function AdminManagement() {
                                                             className="adm-mgmt-action-btn edit"
                                                             onClick={() => startEdit(admin)}
                                                         >
-                                                            ✏️
+                                                            <Pencil size={14} aria-hidden="true" />
                                                         </button>
                                                         <button
                                                             className="adm-mgmt-action-btn delete"
                                                             onClick={() => handleDelete(admin.id, admin.email)}
                                                         >
-                                                            🗑
+                                                            <Trash2 size={14} aria-hidden="true" />
                                                         </button>
                                                     </>
                                                 )}

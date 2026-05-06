@@ -66,7 +66,7 @@
 }
 
 .adm-sb-item-icon {
-    font-size: 1.1rem;
+    flex-shrink: 0;
 }
 
 .adm-sb-item-label {
@@ -198,7 +198,7 @@
     color: #FFD54F;
 }
 .adm-sb-scope-icon {
-    font-size: 0.9rem;
+    flex-shrink: 0;
 }
 .adm-sb-scope-text {
     font-weight: 600;
@@ -222,6 +222,9 @@
 
 /* ── User Country in Footer ────────────────────────────────────────────────────*/
 .adm-sb-user-country {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
     color: #81D4FA;
     font-size: 0.65rem;
     margin-top: 2px;

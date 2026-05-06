@@ -36,3 +36,4 @@ backend/ai-engine/.env
 backend/server/data/
 
 frontend/public/videos/*.mp4
+opencode.json

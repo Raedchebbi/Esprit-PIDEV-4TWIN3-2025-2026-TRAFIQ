@@ -1,29 +1,57 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<testsuites name="vitest tests" tests="9" failures="0" errors="0" time="0.8091082">
-    <testsuite name="src/shared/context/AuthContext.test.jsx" timestamp="2026-05-05T16:20:22.829Z" hostname="DESKTOP-HLLL27L" tests="3" failures="0" errors="0" skipped="0" time="0.2850104">
-        <testcase classname="src/shared/context/AuthContext.test.jsx" name="AuthContext &gt; hydrates an existing session from sessionStorage" time="0.044592">
+<testsuites name="vitest tests" tests="17" failures="0" errors="0" time="7.0022871">
+    <testsuite name="src/shared/context/AuthContext.test.jsx" timestamp="2026-05-06T06:31:34.774Z" hostname="LAPTOP-489MN4LD" tests="3" failures="0" errors="0" skipped="0" time="0.9382131">
+        <testcase classname="src/shared/context/AuthContext.test.jsx" name="AuthContext &gt; hydrates an existing session from sessionStorage" time="0.1513235">
         </testcase>
-        <testcase classname="src/shared/context/AuthContext.test.jsx" name="AuthContext &gt; stores the user and token after a successful login" time="0.2007332">
+        <testcase classname="src/shared/context/AuthContext.test.jsx" name="AuthContext &gt; stores the user and token after a successful login" time="0.6122961">
         </testcase>
-        <testcase classname="src/shared/context/AuthContext.test.jsx" name="AuthContext &gt; clears the session on logout" time="0.0373479">
-        </testcase>
-    </testsuite>
-    <testsuite name="src/shared/services/publicApi.test.js" timestamp="2026-05-05T16:20:22.832Z" hostname="DESKTOP-HLLL27L" tests="2" failures="0" errors="0" skipped="0" time="0.0092042">
-        <testcase classname="src/shared/services/publicApi.test.js" name="publicApi navigation session token support &gt; sends sessionToken with position updates" time="0.0056315">
-        </testcase>
-        <testcase classname="src/shared/services/publicApi.test.js" name="publicApi navigation session token support &gt; sends sessionToken when ending navigation" time="0.0012897">
+        <testcase classname="src/shared/context/AuthContext.test.jsx" name="AuthContext &gt; clears the session on logout" time="0.1662932">
         </testcase>
     </testsuite>
-    <testsuite name="src/apps/public/components/NavigationOverlay.test.jsx" timestamp="2026-05-05T16:20:22.834Z" hostname="DESKTOP-HLLL27L" tests="2" failures="0" errors="0" skipped="0" time="0.241698">
-        <testcase classname="src/apps/public/components/NavigationOverlay.test.jsx" name="NavigationOverlay &gt; renders active navigation state" time="0.0615667">
+    <testsuite name="src/shared/services/publicApi.test.js" timestamp="2026-05-06T06:31:34.856Z" hostname="LAPTOP-489MN4LD" tests="2" failures="0" errors="0" skipped="0" time="0.0283582">
+        <testcase classname="src/shared/services/publicApi.test.js" name="publicApi navigation session token support &gt; sends sessionToken with position updates" time="0.0186844">
         </testcase>
-        <testcase classname="src/apps/public/components/NavigationOverlay.test.jsx" name="NavigationOverlay &gt; calls endNavigation from the context" time="0.1777143">
+        <testcase classname="src/shared/services/publicApi.test.js" name="publicApi navigation session token support &gt; sends sessionToken when ending navigation" time="0.0033586">
         </testcase>
     </testsuite>
-    <testsuite name="src/apps/public/components/RouteRecommendationCard.test.jsx" timestamp="2026-05-05T16:20:22.835Z" hostname="DESKTOP-HLLL27L" tests="2" failures="0" errors="0" skipped="0" time="0.2731956">
-        <testcase classname="src/apps/public/components/RouteRecommendationCard.test.jsx" name="RouteRecommendationCard &gt; renders backend-driven route details" time="0.0660514">
+    <testsuite name="src/shared/hooks/useRouteRecommendations.test.js" timestamp="2026-05-06T06:31:34.909Z" hostname="LAPTOP-489MN4LD" tests="2" failures="0" errors="0" skipped="0" time="0.1237216">
+        <testcase classname="src/shared/hooks/useRouteRecommendations.test.js" name="useRouteRecommendations &gt; parses freeform coordinate inputs and requests route suggestions" time="0.0977876">
         </testcase>
-        <testcase classname="src/apps/public/components/RouteRecommendationCard.test.jsx" name="RouteRecommendationCard &gt; starts navigation when the CTA is clicked" time="0.2048412">
+        <testcase classname="src/shared/hooks/useRouteRecommendations.test.js" name="useRouteRecommendations &gt; rejects invalid coordinate input" time="0.018627">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/shared/hooks/useRouteSession.test.js" timestamp="2026-05-06T06:31:34.935Z" hostname="LAPTOP-489MN4LD" tests="2" failures="0" errors="0" skipped="0" time="0.1277216">
+        <testcase classname="src/shared/hooks/useRouteSession.test.js" name="useRouteSession &gt; starts a real backend-backed navigation session" time="0.0808826">
+        </testcase>
+        <testcase classname="src/shared/hooks/useRouteSession.test.js" name="useRouteSession &gt; does not create a fake local session when navigation start fails" time="0.0412604">
+            <system-err>
+[useRouteSession] Failed to start navigation: 503
+
+            </system-err>
+        </testcase>
+    </testsuite>
+    <testsuite name="src/shared/hooks/useTrafikData.test.js" timestamp="2026-05-06T06:31:34.967Z" hostname="LAPTOP-489MN4LD" tests="1" failures="0" errors="0" skipped="0" time="0.2657178">
+        <testcase classname="src/shared/hooks/useTrafikData.test.js" name="useTrafikData &gt; hydrates public traffic state from backend endpoints" time="0.257837">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/apps/public/components/NavigationOverlay.test.jsx" timestamp="2026-05-06T06:31:34.972Z" hostname="LAPTOP-489MN4LD" tests="2" failures="0" errors="0" skipped="0" time="3.2060772">
+        <testcase classname="src/apps/public/components/NavigationOverlay.test.jsx" name="NavigationOverlay &gt; renders active navigation state" time="0.2513904">
+        </testcase>
+        <testcase classname="src/apps/public/components/NavigationOverlay.test.jsx" name="NavigationOverlay &gt; calls endNavigation from the context" time="2.9477354">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/apps/public/components/RouteRecommendationCard.test.jsx" timestamp="2026-05-06T06:31:34.978Z" hostname="LAPTOP-489MN4LD" tests="3" failures="0" errors="0" skipped="0" time="1.0086161">
+        <testcase classname="src/apps/public/components/RouteRecommendationCard.test.jsx" name="RouteRecommendationCard &gt; renders backend-driven route details" time="0.2339956">
+        </testcase>
+        <testcase classname="src/apps/public/components/RouteRecommendationCard.test.jsx" name="RouteRecommendationCard &gt; normalizes backend risk scores expressed as fractions" time="0.0913403">
+        </testcase>
+        <testcase classname="src/apps/public/components/RouteRecommendationCard.test.jsx" name="RouteRecommendationCard &gt; starts navigation when the CTA is clicked" time="0.6701844">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/apps/admin/components/IncidentCard.test.jsx" timestamp="2026-05-06T06:31:34.999Z" hostname="LAPTOP-489MN4LD" tests="2" failures="0" errors="0" skipped="0" time="1.3038615">
+        <testcase classname="src/apps/admin/components/IncidentCard.test.jsx" name="IncidentCard snapshots &gt; loads the snapshot through the authenticated API service" time="1.0434906">
+        </testcase>
+        <testcase classname="src/apps/admin/components/IncidentCard.test.jsx" name="IncidentCard snapshots &gt; shows an error when the snapshot fetch fails" time="0.2533988">
         </testcase>
     </testsuite>
 </testsuites>

@@ -58,6 +58,7 @@ function isNearPolyline(lat, lng, polyline, radiusMeters) {
 export function useScopedNotifications({
   incidents = [],
   routeCoords = null,
+  routeOrigin = null,
   userPosition = null,
   routeRadiusMeters = 500,
   geoRadiusMeters = 1000,
@@ -77,20 +78,28 @@ export function useScopedNotifications({
           type: 'accident',
           severity: mapSeverity(inc.risk_level || inc.severity),
           title: getAlertTitle(inc),
-          message: getAlertMessage(inc, userPosition),
+          message: '',
           lat: inc.lat,
           lng: inc.lng,
-          distance: Math.round(haversine(userPosition.lat, userPosition.lng, inc.lat, inc.lng)),
+          distanceToUser: Math.round(
+            haversine(userPosition.lat, userPosition.lng, inc.lat, inc.lng)
+          ),
+          distanceFromRouteOrigin:
+            routeOrigin && Number.isFinite(routeOrigin.lat) && Number.isFinite(routeOrigin.lng)
+              ? Math.round(haversine(routeOrigin.lat, routeOrigin.lng, inc.lat, inc.lng))
+              : null,
+          distance: 0,
           timestamp: inc.timestamp || new Date().toISOString(),
           scope: null, // Will be set below
           cameraId: inc.camera_id,
+          riskLevel: inc.risk_level || inc.severity,
         })),
       // Include WebSocket alerts
       ...wsAlerts.map((a) => ({
         id: a.incident_id || a.id || `ws_${a.cam_id}`,
         type: a.type || 'accident',
         severity: a.severity || 'medium',
-        title: a.title || '⚠️ Alerte TRAFIQ',
+        title: a.title || 'Alerte TRAFIQ',
         message: a.message || 'Incident détecté à proximité',
         lat: a.lat || 0,
         lng: a.lng || 0,
@@ -106,24 +115,25 @@ export function useScopedNotifications({
         // Skip dismissed
         if (dismissedIds.has(alert.id)) return false;
 
-        // Check route-scoped (within routeRadiusMeters of route polyline)
+        // Only show alerts for true route matches.
         if (routeCoords && routeCoords.length >= 2) {
           if (isNearPolyline(alert.lat, alert.lng, routeCoords, routeRadiusMeters)) {
             alert.scope = 'route';
+            if (typeof alert.distanceFromRouteOrigin === 'number') {
+              alert.distance = alert.distanceFromRouteOrigin;
+              alert.message = getAlertMessage(alert.distance, 'route', alert.riskLevel);
+            } else {
+              alert.distance = alert.distanceToUser || alert.distance || 0;
+              alert.message = getAlertMessage(alert.distance, 'geo', alert.riskLevel);
+            }
             return true;
           }
-        }
-
-        // Check geo-scoped (within geoRadiusMeters of user position)
-        if (alert.distance <= geoRadiusMeters) {
-          alert.scope = 'geo';
-          return true;
         }
 
         return false;
       })
       .sort((a, b) => a.distance - b.distance);
-  }, [incidents, routeCoords, userPosition, routeRadiusMeters, geoRadiusMeters, wsAlerts, dismissedIds]);
+  }, [incidents, routeCoords, routeOrigin, userPosition, routeRadiusMeters, geoRadiusMeters, wsAlerts, dismissedIds]);
 
   // Dismiss a specific alert
   const dismissAlert = useCallback((alertId) => {
@@ -160,18 +170,19 @@ function getAlertTitle(inc) {
   const type = inc.type || inc.incident_type || 'accident';
   const severity = inc.risk_level || inc.severity || 'medium';
   if (severity === 'CRITICAL' || severity === 'critical') {
-    return '🚨 ACCIDENT CRITIQUE SUR VOTRE ROUTE';
+    return 'ACCIDENT CRITIQUE SUR VOTRE ROUTE';
   }
   if (type.includes('collision') || type.includes('ACCIDENT')) {
-    return '⚠️ Accident détecté à proximité';
+    return 'Accident détecté à proximité';
   }
-  return '⚠️ Alerte TRAFIQ';
+  return 'Alerte TRAFIQ';
 }
 
-function getAlertMessage(inc, userPosition) {
-  const dist = Math.round(
-    haversine(userPosition.lat, userPosition.lng, inc.lat, inc.lng)
-  );
-  const risk = inc.risk_level ? ` Risque: ${inc.risk_level}.` : '';
-  return `Incident à ${dist}m de votre position.${risk} Soyez vigilant.`;
+function getAlertMessage(distance, scope, riskLevel) {
+  const risk = riskLevel ? ` Risque: ${riskLevel}.` : '';
+  const distanceLabel =
+    scope === 'route'
+      ? 'du départ de votre itinéraire'
+      : 'de votre position';
+  return `Incident à ${distance}m ${distanceLabel}.${risk} Soyez vigilant.`;
 }

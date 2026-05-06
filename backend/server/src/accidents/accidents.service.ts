@@ -7,6 +7,7 @@ import { MongoPrimaryRepository } from '../mongodb/mongo-primary.repository';
 @Injectable()
 export class AccidentsService {
   private readonly logger = new Logger(AccidentsService.name);
+  private readonly ACTIVE_WINDOW_MS = 15 * 60 * 1000;
 
   // Python AI engine appends one JSON object per line to this file.
   private readonly incidentsFile = path.resolve(
@@ -65,7 +66,7 @@ export class AccidentsService {
       }
     }
     return this.readAll()
-      .filter((inc) => !inc.false_positive)
+      .filter((inc) => !inc.false_positive && this.isActiveIncident(inc))
       .reverse()
       .slice(0, 100);
   }
@@ -152,9 +153,23 @@ export class AccidentsService {
       }
     }
     return this.readAll()
-      .filter((inc) => !inc.false_positive && cameraIds.includes(inc.camera_id))
+      .filter(
+        (inc) =>
+          !inc.false_positive &&
+          cameraIds.includes(inc.camera_id) &&
+          this.isActiveIncident(inc),
+      )
       .reverse()
       .slice(0, 100);
+  }
+
+  private isActiveIncident(incident: Accident): boolean {
+    const timestamp = Date.parse(incident.timestamp);
+    if (Number.isNaN(timestamp)) {
+      return true;
+    }
+
+    return Date.now() - timestamp <= this.ACTIVE_WINDOW_MS;
   }
 
   /** Flag false positives — only for incidents belonging to allowed cameras. */

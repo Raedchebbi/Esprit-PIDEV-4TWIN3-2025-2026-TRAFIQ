@@ -24,8 +24,8 @@
 }
 
 .proximity-toast-icon {
-    font-size: 1.3rem;
     flex-shrink: 0;
+    color: var(--color-accident);
 }
 
 .proximity-toast-body {
@@ -60,6 +60,9 @@
 }
 
 .proximity-toast-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     background: none;
     border: none;
     cursor: pointer;
@@ -136,4 +139,10 @@
     .proximity-alerts-stack {
         bottom: 72px;
     }
+}
+
+.notif-permission-banner > span {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
 }

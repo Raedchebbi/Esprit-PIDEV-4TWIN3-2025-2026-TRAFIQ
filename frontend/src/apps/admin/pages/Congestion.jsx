@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { MapPinned, Video } from 'lucide-react';
 import { trafiqApi } from '../../../shared/services/trafiqApi';
 import './Congestion.css';
 
@@ -113,7 +114,7 @@ export default function Congestion() {
                             <div className="adm-cong-zone-info">
                                 <div>
                                     <div className="adm-cong-zone-name">{zone.name}</div>
-                                    <div className="adm-cong-zone-cam">📹 {zone.area}</div>
+                                    <div className="adm-cong-zone-cam"><Video size={12} aria-hidden="true" /> {zone.area}</div>
                                 </div>
                             </div>
                             <span
@@ -156,7 +157,8 @@ export default function Congestion() {
                             style={{ width: '100%', marginTop: 8 }}
                             onClick={() => navigate(`/admin/dashboard?cam=${zone.id}`)}
                         >
-                            🗺 Localiser sur la carte
+                            <MapPinned size={14} aria-hidden="true" />
+                            Localiser sur la carte
                         </button>
                     </div>
                 ))}

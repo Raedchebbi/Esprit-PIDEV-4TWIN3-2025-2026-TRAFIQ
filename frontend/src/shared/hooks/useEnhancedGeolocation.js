@@ -3,7 +3,6 @@
 // and position smoothing for high-accuracy navigation tracking.
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { USER_POSITION_MOCK } from './useTrafikData';
 
 /**
  * Movement state classification thresholds (m/s):
@@ -55,7 +54,7 @@ export function useEnhancedGeolocation(options = {}) {
     typeof navigator !== 'undefined' && 'geolocation' in navigator;
 
   const [position, setPosition] = useState(
-    hasGeolocation ? null : USER_POSITION_MOCK
+    null
   );
   const [speed, setSpeed] = useState(0);
   const [heading, setHeading] = useState(0);
@@ -162,10 +161,6 @@ export function useEnhancedGeolocation(options = {}) {
       processPosition,
       (err) => {
         setError(err.message);
-        // Fallback to mock position if real geolocation fails
-        if (!lastPositionRef.current) {
-          setPosition(USER_POSITION_MOCK);
-        }
       },
       { enableHighAccuracy, timeout, maximumAge }
     );
@@ -184,7 +179,7 @@ export function useEnhancedGeolocation(options = {}) {
   ]);
 
   return {
-    position: position || USER_POSITION_MOCK,
+    position,
     speed,
     heading,
     accuracy,

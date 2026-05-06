@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import { Ban, Check, Trash2, X } from 'lucide-react';
 import IncidentCard from '../components/IncidentCard';
 import { trafiqApi } from '../../../shared/services/trafiqApi';
 import './Incidents.css';
@@ -9,9 +10,15 @@ export default function Incidents() {
     const [selected, setSelected] = useState(new Set());
 
     const load = useCallback(() => {
-        trafiqApi.getAccidents()
-            .then(data => {
-                const mapped = data.map((log) => ({
+        Promise.all([trafiqApi.getAccidents(), trafiqApi.getActiveAccidents()])
+            .then(([allData, activeData]) => {
+                const activeIds = new Set(
+                    Array.isArray(activeData)
+                        ? activeData.map((log) => log.incident_id)
+                        : [],
+                );
+
+                const mapped = (Array.isArray(allData) ? allData : []).map((log) => ({
                     id: log.incident_id,
                     type: 'Collision',
                     severity: 'high',
@@ -21,7 +28,7 @@ export default function Incidents() {
                     timestamp: log.timestamp,
                     snapshot: log.snapshot,
                     camera_id: log.camera_id,
-                    active: !log.false_positive,
+                    active: activeIds.has(log.incident_id),
                     false_positive: !!log.false_positive,
                 }));
                 setAiIncidents(mapped);
@@ -101,20 +108,24 @@ export default function Incidents() {
                             {/* Show flag button if any selected item is active */}
                             {[...selected].some(id => activeIncidents.find(a => a.id === id)) && (
                                 <button className="adm-btn-warning" onClick={handleFlag}>
-                                    🚫 Faux positif
+                                    <Ban size={14} aria-hidden="true" />
+                                    Faux positif
                                 </button>
                             )}
                             {/* Show unflag button if any selected item is a false positive */}
                             {[...selected].some(id => fpIncidents.find(a => a.id === id)) && (
                                 <button className="adm-btn-primary" onClick={handleUnflag}>
-                                    ✅ Rétablir
+                                    <Check size={14} aria-hidden="true" />
+                                    Rétablir
                                 </button>
                             )}
                             <button className="adm-btn-danger" onClick={handleRemove}>
-                                🗑 Supprimer
+                                <Trash2 size={14} aria-hidden="true" />
+                                Supprimer
                             </button>
                             <button className="adm-btn-ghost" onClick={() => setSelected(new Set())}>
-                                ✕ Annuler
+                                <X size={14} aria-hidden="true" />
+                                Annuler
                             </button>
                         </div>
                     )}
